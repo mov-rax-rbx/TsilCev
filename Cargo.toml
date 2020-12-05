@@ -1,0 +1,16 @@
+[package]
+name = "tsil_cev"
+version = "0.1.0"
+authors = ["mov-rax-rbx <73437427+mov-rax-rbx@users.noreply.github.com>"]
+edition = "2018"
+
+[[bench]]
+name = "bench"
+harness = false
+
+[[test]]
+name = "tests"
+path = "tests/tests.rs"
+
+[dev-dependencies]
+criterion = "^0.3.3"
