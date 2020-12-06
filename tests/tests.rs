@@ -411,7 +411,33 @@ fn test_from_slice() {
     tc.push_front(3000);
     tc.push_front(4000);
 
-    let etalon = vec![4000, 3000, 2000, 1000, 500, 501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510, 508, 100, 200, 300, 400];
+    let etalon = vec![
+        4000, 3000, 2000, 1000,
+        500, 501, 502, 503, 504, 510, 508,
+        500, 501, 502, 503, 504, 510, 508,
+        100, 200, 300, 400
+    ];
+    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.front(), etalon.first());
+    assert_eq!(tc.back(), etalon.last());
+
+    let etalon = vec![500, 501];
+    let tc = TsilCev::from_slice(&etalon);
+    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.front(), etalon.first());
+    assert_eq!(tc.back(), etalon.last());
+
+    let etalon = vec![500];
+    let tc = TsilCev::from_slice(&etalon);
+    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.front(), etalon.first());
+    assert_eq!(tc.back(), etalon.last());
+
+    let etalon = Vec::<usize>::new();
+    let tc = TsilCev::from_slice(&etalon);
     assert_eq!(tc.clone().to_vec(), etalon);
     assert_eq!(tc.density(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
