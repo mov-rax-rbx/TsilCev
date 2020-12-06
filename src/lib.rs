@@ -3,6 +3,7 @@
 use core::mem;
 use core::fmt;
 use core::hash::{Hash, Hasher};
+use core::cmp::Ordering;
 use crate::index::Index;
 
 pub(crate) mod index {
@@ -336,14 +337,9 @@ impl<T> TsilCev<T> {
     }
 
     pub fn pop_back(&mut self) -> Option<T> {
-        // safe because self.end index in cev and cev.size > 0
-        let end_is_empty = self.end().is_none();
-        if end_is_empty {
-            None
-        } else {
-            // safe because value is never read until a new value is added
-            Some(unsafe { self.make_empty(self.end) }.0)
-        }
+        let end = self.end().to_option()?;
+        // safe because value is never read until a new value is added
+        Some(unsafe { self.make_empty(end) }.0)
     }
 
     pub fn push_front(&mut self, val: T) {
@@ -510,7 +506,7 @@ impl<T> TsilCev<T> {
     #[inline]
     unsafe fn try_realoc(&mut self, save_idx: Index) -> Index {
         let realoc_len = self.cev.capacity() >> 1;
-        // density balance if dencity < cev.len() / 4 then realocate for less capacity
+        // density balance if density < cev.len() / 4 then realocate for less capacity
         if realoc_len > Self::MIN_REALOC_LEN
             && self.cev.len() >= realoc_len
             && self.density <= realoc_len >> 1
@@ -1190,6 +1186,33 @@ impl<'t, T: 't + Copy> Extend<&'t T> for TsilCev<T> {
     #[inline]
     fn extend<I: IntoIterator<Item = &'t T>>(&mut self, iter: I) {
         self.extend(iter.into_iter().cloned());
+    }
+}
+
+impl<T: PartialEq> PartialEq for TsilCev<T> {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.density() == other.density() && self.iter_tsil().eq(other)
+    }
+    #[inline]
+    fn ne(&self, other: &Self) -> bool {
+        !self.eq(other)
+    }
+}
+
+impl<T: Eq> Eq for TsilCev<T> {}
+
+impl<T: PartialOrd> PartialOrd for TsilCev<T> {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.iter_tsil().partial_cmp(other)
+    }
+}
+
+impl<T: Ord> Ord for TsilCev<T> {
+    #[inline]
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.iter_tsil().cmp(other)
     }
 }
 

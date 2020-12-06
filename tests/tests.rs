@@ -86,6 +86,34 @@ fn test_pop() {
     assert_eq!(tc.density(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
+
+    let tc = TsilCev::from_slice(&[
+        501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510,
+        501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510,
+        501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510,
+        501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510,
+    ]);
+    let mut tc_pop_back = tc.clone();
+    while tc_pop_back.density() != 0 {
+        tc_pop_back.pop_back();
+    }
+
+    let etalon = Vec::<usize>::new();
+    assert_eq!(tc_pop_back.clone().to_vec(), etalon);
+    assert_eq!(tc_pop_back.density(), etalon.len());
+    assert_eq!(tc_pop_back.front(), etalon.first());
+    assert_eq!(tc_pop_back.back(), etalon.last());
+
+    let mut tc_pop_front = tc.clone();
+    while tc_pop_front.density() != 0 {
+        tc_pop_front.pop_front();
+    }
+
+    let etalon = Vec::<usize>::new();
+    assert_eq!(tc_pop_front.clone().to_vec(), etalon);
+    assert_eq!(tc_pop_front.density(), etalon.len());
+    assert_eq!(tc_pop_front.front(), etalon.first());
+    assert_eq!(tc_pop_front.back(), etalon.last());
 }
 
 #[test]
@@ -276,7 +304,15 @@ fn test_remove_balance() {
     let etalon = (50..64).into_iter().map(|x| x).collect::<Vec<_>>();
     assert_eq!(tc.density(), 14);
     assert_eq!(tc.cev_len(), 64 / 2);
-    assert_eq!(tc.to_vec(), etalon);
+    assert_eq!(tc.clone().to_vec(), etalon);
+
+    let old_dencity = tc.density();
+    tc.pop_back();
+    tc.pop_back();
+    assert_eq!(tc.density(), old_dencity - 2);
+    tc.push_back(5);
+    tc.push_back(10);
+    assert_eq!(tc.density(), old_dencity);
 }
 
 #[test]
