@@ -1,6 +1,6 @@
 #![feature(untagged_unions)]
 
-use core::mem::ManuallyDrop;
+use core::mem;
 use core::fmt;
 use crate::index::Index;
 
@@ -28,7 +28,7 @@ pub(crate) mod index {
 
 #[derive(Debug)]
 struct Val<T> {
-    el: ManuallyDrop<T>,
+    el: mem::ManuallyDrop<T>,
     next: Index,
     prev: Index,
 }
@@ -289,8 +289,8 @@ impl<T> TsilCev<T> {
         while let Some(x) = cursor {
             // safe because cursor traversal in tsil_cev
             cursor = unsafe { self.cev.get_unchecked(x).union.val.next }.to_option();
-            // safe because self move and drop and after ManuallyDrop::take data in self never read
-            ret.push(unsafe { ManuallyDrop::take(&mut self.cev.get_unchecked_mut(x).union.val.el) });
+            // safe because self move and drop and after mem::ManuallyDrop::take data in self never read
+            ret.push(unsafe { mem::ManuallyDrop::take(&mut self.cev.get_unchecked_mut(x).union.val.el) });
         }
         ret
     }
@@ -398,7 +398,7 @@ impl<T> TsilCev<T> {
         *self.cev.get_unchecked_mut(idx) = Tsil {
             union: TsilUnion {
                 val: Val {
-                    el: ManuallyDrop::new(val),
+                    el: mem::ManuallyDrop::new(val),
                     next: Index::None,
                     prev: if !end_is_empty { Index(self.end) } else { Index::None },
                 }
@@ -422,7 +422,7 @@ impl<T> TsilCev<T> {
         *self.cev.get_unchecked_mut(idx) = Tsil {
             union: TsilUnion {
                 val: Val {
-                    el: ManuallyDrop::new(val),
+                    el: mem::ManuallyDrop::new(val),
                     next: if !start_is_empty { Index(self.start) } else { Index::None },
                     prev: Index::None,
                 }
@@ -449,7 +449,7 @@ impl<T> TsilCev<T> {
         *self.cev.get_unchecked_mut(current.0) = Tsil {
             union: TsilUnion {
                 val: Val {
-                    el: ManuallyDrop::new(val),
+                    el: mem::ManuallyDrop::new(val),
                     next: next,
                     prev: prev,
                 }
@@ -518,7 +518,7 @@ impl<T> TsilCev<T> {
 
         // safe if !self.is_empty(idx) and after safe because value is mark is_empty
         // and never read until a new value is added
-        let ret = ManuallyDrop::take(
+        let ret = mem::ManuallyDrop::take(
             &mut self.cev.get_unchecked_mut(idx).union.val.el
         );
 
@@ -600,8 +600,8 @@ impl<T> TsilCev<T> {
             && !self.is_empty(idx)
         );
 
-        let idx_val = core::mem::take(self.cev.get_unchecked_mut(idx));
-        let empty_val = core::mem::take(self.cev.get_unchecked_mut(empty_idx));
+        let idx_val = mem::take(self.cev.get_unchecked_mut(idx));
+        let empty_val = mem::take(self.cev.get_unchecked_mut(empty_idx));
         *self.cev.get_unchecked_mut(empty_idx) = idx_val;
         *self.cev.get_unchecked_mut(idx) = empty_val;
 
@@ -647,7 +647,7 @@ impl<T: Clone> TsilCev<T> {
                     *x = Tsil {
                         union: TsilUnion {
                             val: Val {
-                                el: ManuallyDrop::new(val.clone()),
+                                el: mem::ManuallyDrop::new(val.clone()),
                                 next: Index(next),
                                 prev: Index(next - 1),
                             },
@@ -1141,6 +1141,17 @@ impl<'t, T: 't + Copy> Extend<&'t T> for TsilCev<T> {
         self.extend(iter.into_iter().cloned());
     }
 }*/
+
+impl<T> Drop for Tsil<T> {
+    fn drop(&mut self) {
+        if mem::needs_drop::<T>() && !self.is_empty {
+            // safe because check self not empty
+            unsafe {
+                mem::ManuallyDrop::drop(&mut self.union.val.el);
+            }
+        }
+    }
+}
 
 impl<T: Clone> Clone for Val<T> {
     fn clone(&self) -> Self {
