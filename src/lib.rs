@@ -1,7 +1,3 @@
-#![feature(untagged_unions)]
-
-use core::mem;
-use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::cmp::Ordering;
 use crate::index::Index;
@@ -28,57 +24,18 @@ pub(crate) mod index {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Val<T> {
-    el: mem::ManuallyDrop<T>,
+    el: T,
     next: Index,
     prev: Index,
 }
 
-union TsilUnion<T> {
-    val: Val<T>,
-    next_empty: Index,
-}
-
-struct Tsil<T> {
-    union: TsilUnion<T>,
-    is_empty: bool,
-}
-
-impl<T: fmt::Debug> fmt::Debug for Tsil<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.is_empty {
-            // safe because check self is empty
-            f.debug_tuple("Empty")
-                .field(unsafe { &self.union.next_empty })
-                .finish()
-        } else {
-            // safe because check self is not empty
-            f.debug_tuple("")
-                .field(unsafe { &self.union.val })
-                .finish()
-        }
-    }
-}
-
-impl<T> Default for Tsil<T> {
-    #[inline]
-    fn default() -> Self {
-        Tsil {
-            union: TsilUnion {
-                next_empty: Index::None,
-            },
-            is_empty: true,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct TsilCev<T> {
-    cev: Vec<Tsil<T>>,
-    empty_idx: Index,
-    start: usize,
-    end: usize,
+    cev: Vec<Val<T>>,
+    start: Index,
+    end: Index,
     density: usize,
 }
 
@@ -87,62 +44,39 @@ impl<T> TsilCev<T> {
     const MIN_REALOC_LEN: usize = 8;
 
     pub fn with_capacity(cap: usize) -> Self {
-        let cap = if cap == 0 { 1 } else { cap };
-        let mut cev = Vec::with_capacity(cap);
-        cev.push(Tsil::default());
         Self {
-            cev: cev,
-            empty_idx: Index(0),
-            start: 0,
-            end: 0,
+            cev: Vec::with_capacity(cap),
+            start: Index::None,
+            end: Index::None,
             density: 0,
         }
     }
 
     pub fn new() -> Self {
         Self {
-            cev: vec![Tsil::default()],
-            empty_idx: Index(0),
-            start: 0,
-            end: 0,
+            cev: Vec::new(),
+            start: Index::None,
+            end: Index::None,
             density: 0,
         }
     }
 
     pub fn clear(&mut self) {
-        self.cev.truncate(1);
-        debug_assert!(self.cev.len() > 0);
-        // safe because save first element
-        unsafe {
-            *self.cev.get_unchecked_mut(0) = Tsil {
-                union: TsilUnion {
-                    next_empty: Index::None,
-                },
-                is_empty: true,
-           };
-        }
-        self.start = 0;
-        self.end = 0;
+        self.cev.clear();
+        self.start = Index::None;
+        self.end = Index::None;
         self.density = 0;
-        self.empty_idx = Index(0);
     }
 
     #[inline]
-    unsafe fn is_empty(&self, idx: usize) -> bool {
-        debug_assert!(idx < self.cev.len());
-        self.cev.get_unchecked(idx).is_empty
-    }
-    #[inline]
     fn start(&self) -> Index {
-        debug_assert!(self.start < self.cev.len());
-        // safe because always have 1 element
-        if unsafe { self.is_empty(self.start) } { Index::None } else { Index(self.start) }
+        debug_assert!(self.start.to_option().map_or(true, |x| x < self.cev.len()));
+        self.start
     }
     #[inline]
     fn end(&self) -> Index {
-        debug_assert!(self.end < self.cev.len());
-        // safe because always have 1 element
-        if unsafe { self.is_empty(self.end) } { Index::None } else { Index(self.end) }
+        debug_assert!(self.end.to_option().map_or(true, |x| x < self.cev.len()));
+        self.end
     }
 
     #[inline]
@@ -165,38 +99,39 @@ impl<T> TsilCev<T> {
     pub fn iter_cev(&self) -> CevIter<T> {
         CevIter {
             tsil_cev: self,
-            cursor: Some(0),
+            cursor: if self.cev.is_empty() { None } else { Some(0) },
         }
     }
     #[inline]
     pub fn iter_cev_mut(&mut self) -> CevIterMut<T> {
+        let is_empty = self.cev.is_empty();
         CevIterMut {
             tsil_cev: self,
-            cursor: Some(0),
+            cursor: if is_empty { None } else { Some(0) },
         }
     }
 
     #[inline]
     pub fn front(&self) -> Option<&T> {
         // safe because check back not empty
-        Some(unsafe { &*self.cev.get_unchecked(self.start().to_option()?).union.val.el })
+        Some(unsafe { &self.cev.get_unchecked(self.start().to_option()?).el })
     }
     #[inline]
     pub fn back(&self) -> Option<&T> {
         // safe because check back not empty
-        Some(unsafe { &*self.cev.get_unchecked(self.end().to_option()?).union.val.el })
+        Some(unsafe { &self.cev.get_unchecked(self.end().to_option()?).el })
     }
     #[inline]
     pub fn front_mut(&mut self) -> Option<&mut T> {
         let start = self.start().to_option()?;
         // safe because check back not empty
-        Some(unsafe { &mut *self.cev.get_unchecked_mut(start).union.val.el })
+        Some(unsafe { &mut self.cev.get_unchecked_mut(start).el })
     }
     #[inline]
     pub fn back_mut(&mut self) -> Option<&mut T> {
         let end = self.end().to_option()?;
         // safe because check back not empty
-        Some(unsafe { &mut *self.cev.get_unchecked_mut(end).union.val.el })
+        Some(unsafe { &mut self.cev.get_unchecked_mut(end).el })
     }
 
     #[inline]
@@ -275,18 +210,19 @@ impl<T> TsilCev<T> {
         }
     }
 
-    pub fn to_vec(mut self) -> Vec<T> {
+    pub fn to_vec(self) -> Vec<T> {
         // like
         // self.into_iter().map(move |x| x).collect::<Vec<_>>()
 
+        // Faster then previous?
         let mut ret = Vec::with_capacity(self.density);
-        // safe because always have 1 element
         let mut cursor = self.start().to_option();
         while let Some(x) = cursor {
             // safe because cursor traversal in tsil_cev
-            cursor = unsafe { self.cev.get_unchecked(x).union.val.next }.to_option();
-            // safe because self move and drop and after mem::ManuallyDrop::take data in self never read
-            ret.push(unsafe { mem::ManuallyDrop::take(&mut self.cev.get_unchecked_mut(x).union.val.el) });
+            cursor = unsafe { self.cev.get_unchecked(x).next }.to_option();
+            // safe because self move and drop in end
+            let val = unsafe { core::ptr::read(self.cev.as_ptr().add(x)).el };
+            ret.push(val);
         }
         ret
     }
@@ -315,25 +251,8 @@ impl<T> TsilCev<T> {
         }
     }
 
-    #[inline]
-    fn create_empty_index(&mut self) -> usize {
-        match self.empty_idx.to_option() {
-            Some(idx) => {
-                // safe because 0 <= empty_idx < cev.len and next_empty is Option<usize>
-                self.empty_idx = unsafe { self.cev.get_unchecked(idx).union.next_empty };
-                idx
-            },
-            None => {
-                let idx = self.cev.len();
-                self.cev.push(Tsil::default());
-                idx
-            }
-        }
-    }
-
     pub fn push_back(&mut self, val: T) {
-        let idx = self.create_empty_index();
-        unsafe { self.insert_back(idx, val) };
+        unsafe { self.insert_back(val) };
     }
 
     pub fn pop_back(&mut self) -> Option<T> {
@@ -343,8 +262,7 @@ impl<T> TsilCev<T> {
     }
 
     pub fn push_front(&mut self, val: T) {
-        let idx = self.create_empty_index();
-        unsafe { self.insert_front(idx, val) };
+        unsafe { self.insert_front(val) };
     }
 
     pub fn pop_front(&mut self) -> Option<T> {
@@ -354,97 +272,85 @@ impl<T> TsilCev<T> {
     }
 
     #[inline]
-    unsafe fn insert_back(&mut self, idx: usize, val: T) {
-        debug_assert!(idx < self.cev.len());
+    unsafe fn insert_back(&mut self, val: T) {
 
+        let idx = self.cev.len();
+        self.cev.push(Val {
+            el: val,
+            next: Index::None,
+            prev: self.end,
+        });
         // safe because self.end index in cev and cev.size > 0
-        let end_is_empty = self.end().is_none();
-        *self.cev.get_unchecked_mut(idx) = Tsil {
-            union: TsilUnion {
-                val: Val {
-                    el: mem::ManuallyDrop::new(val),
-                    next: Index::None,
-                    prev: if !end_is_empty { Index(self.end) } else { Index::None },
-                }
-            },
-            is_empty: false
-        };
-        // safe because self.end index in cev and cev.size > 0
-        if !end_is_empty {
-            self.cev.get_unchecked_mut(self.end).union.val.next = Index(idx);
+        if !self.end().is_none() {
+            self.cev.get_unchecked_mut(self.end.0).next = Index(idx);
         }
-        self.end = idx;
+        self.end = Index(idx);
+        if self.start().is_none() {
+            self.start = Index(idx);
+        }
         self.density += 1;
     }
 
     #[inline]
-    unsafe fn insert_front(&mut self, idx: usize, val: T) {
-        debug_assert!(idx < self.cev.len());
+    unsafe fn insert_front(&mut self, val: T) {
 
+        let idx = self.cev.len();
+        self.cev.push(Val {
+            el: val,
+            next: self.start,
+            prev: Index::None,
+        });
         // safe because self.start index in cev and cev.size > 0
-        let start_is_empty = self.start().is_none();
-        *self.cev.get_unchecked_mut(idx) = Tsil {
-            union: TsilUnion {
-                val: Val {
-                    el: mem::ManuallyDrop::new(val),
-                    next: if !start_is_empty { Index(self.start) } else { Index::None },
-                    prev: Index::None,
-                }
-            },
-            is_empty: false
-        };
-        // safe because self.start index in cev and cev.size > 0
-        if !start_is_empty {
-            self.cev.get_unchecked_mut(self.start).union.val.prev = Index(idx);
+        if !self.start().is_none() {
+            self.cev.get_unchecked_mut(self.start.0).prev = Index(idx);
         }
-        self.start = idx;
+        self.start = Index(idx);
+        if self.end().is_none() {
+            self.end = Index(idx);
+        }
         self.density += 1;
     }
 
     #[inline]
-    unsafe fn insert(&mut self, prev: Index, next: Index, current: Index, val: T) {
+    unsafe fn insert(&mut self, prev: Index, next: Index, val: T) {
         debug_assert!(
-            if !prev.is_none() { !self.is_empty(prev.0) } else { true }
-            && if !next.is_none() { !self.is_empty(next.0) } else { true }
-            && !current.is_none() && self.is_empty(current.0)
+            prev.to_option().map_or(true, |x| x < self.cev.len())
+            && next.to_option().map_or(true, |x| x < self.cev.len())
         );
-
         // safe because 0 <= currend < cev.len
-        *self.cev.get_unchecked_mut(current.0) = Tsil {
-            union: TsilUnion {
-                val: Val {
-                    el: mem::ManuallyDrop::new(val),
-                    next: next,
-                    prev: prev,
-                }
-            },
-            is_empty: false
-        };
-        self.reconnect(prev, next, current);
+        let current = self.cev.len();
+        self.cev.push(Val {
+            el: val,
+            next: next,
+            prev: prev,
+        });
+        self.reconnect(prev, next, Index(current));
         self.density += 1;
     }
 
     #[inline]
     unsafe fn connect(&mut self, prev: Index, next: Index) {
         debug_assert!(
-            if !prev.is_none() { !self.is_empty(prev.0) } else { true }
-            && if !next.is_none() { !self.is_empty(next.0) } else { true }
+            prev.to_option().map_or(true, |x| x < self.cev.len())
+            && next.to_option().map_or(true, |x| x < self.cev.len())
         );
-
         // safe because 0 <= x and y < cev.len
         match (prev.to_option(), next.to_option()) {
-            (None, None) => {},
+            (None, None) => {
+                self.start = Index::None;
+                self.end = Index::None;
+            },
             (None, Some(y)) => {
-                self.cev.get_unchecked_mut(y).union.val.prev = Index::None;
-                self.start = y;
+                self.cev.get_unchecked_mut(y).prev = Index::None;
+                self.start = Index(y);
             },
             (Some(x), None) => {
-                self.cev.get_unchecked_mut(x).union.val.next = Index::None;
-                self.end = x;
+                self.cev.get_unchecked_mut(x).next = Index::None;
+                self.end = Index(x);
             },
             (Some(x), Some(y)) => {
-                self.cev.get_unchecked_mut(x).union.val.next = Index(y);
-                self.cev.get_unchecked_mut(y).union.val.prev = Index(x);
+                self.cev.get_unchecked_mut(x).next = Index(y);
+                self.cev.get_unchecked_mut(y).prev = Index(x);
             },
         };
     }
@@ -452,25 +358,27 @@ impl<T> TsilCev<T> {
     #[inline]
     unsafe fn reconnect(&mut self, prev: Index, next: Index, current: Index) {
         debug_assert!(
-            if !prev.is_none() { !self.is_empty(prev.0) } else { true }
-            && if !next.is_none() { !self.is_empty(next.0) } else { true }
-            && !current.is_none()
+            prev.to_option().map_or(true, |x| x < self.cev.len())
+            && next.to_option().map_or(true, |x| x < self.cev.len())
+            && current.to_option().map_or(true, |x| x < self.cev.len())
         );
-        
         // safe because 0 <= x and y and z < cev.len
         match (prev.to_option(), current.to_option(), next.to_option()) {
-            (None, Some(_), None) => {},
+            (None, Some(z), None) => {
+                self.start = Index(z);
+                self.end = Index(z);
+            },
             (None, Some(z), Some(y)) => {
-                self.cev.get_unchecked_mut(y).union.val.prev = Index(z);
-                self.start = z;
+                self.cev.get_unchecked_mut(y).prev = Index(z);
+                self.start = Index(z);
             },
             (Some(x), Some(z), None) => {
-                self.cev.get_unchecked_mut(x).union.val.next = Index(z);
-                self.end = z;
+                self.cev.get_unchecked_mut(x).next = Index(z);
+                self.end = Index(z);
             },
             (Some(x), Some(z), Some(y)) => {
-                self.cev.get_unchecked_mut(x).union.val.next = Index(z);
-                self.cev.get_unchecked_mut(y).union.val.prev = Index(z);
+                self.cev.get_unchecked_mut(x).next = Index(z);
+                self.cev.get_unchecked_mut(y).prev = Index(z);
             },
             _ => unreachable!()
         };
@@ -478,121 +386,64 @@ impl<T> TsilCev<T> {
 
     #[inline]
     unsafe fn make_empty(&mut self, idx: usize) -> (T, Index) {
-        debug_assert!(idx < self.cev.len() && !self.is_empty(idx) && self.density() > 0);
+        debug_assert!(idx < self.cev.len() && self.density() > 0);
 
-        // safe if !self.is_empty(idx) and after safe because value is mark is_empty
-        // and never read until a new value is added
-        let ret = mem::ManuallyDrop::take(
-            &mut self.cev.get_unchecked_mut(idx).union.val.el
-        );
-
-        let prev = self.cev.get_unchecked(idx).union.val.prev;
-        let next = self.cev.get_unchecked(idx).union.val.next;
+        let prev = self.cev.get_unchecked(idx).prev;
+        let next = self.cev.get_unchecked(idx).next;
         self.connect(prev, next);
-        *self.cev.get_unchecked_mut(idx) = Tsil {
-            union: TsilUnion {
-                next_empty: self.empty_idx,
-            },
-            is_empty: true,
-        };
-        self.empty_idx = Index(idx);
+        let ret =
+            if idx + 1 != self.cev.len() {
+                let ret = self.swap_remove_mem(idx).el;
+                let prev = self.cev.get_unchecked(idx).prev;
+                let next = self.cev.get_unchecked(idx).next;
+                self.reconnect(prev, next, Index(idx));
+                ret
+            } else {
+                self.cev.pop().unwrap().el
+            };
+
         self.density -= 1;
 
         // safe because we know that index reorder and save index (save_idx)
-        (ret, self.try_realoc(next))
+        self.try_realoc();
+        (ret, if next.0 == self.cev.len() { Index(idx) } else { next })
     }
 
     // unsafe because reorder index and this method don't use in EntryMut
     #[inline]
-    unsafe fn try_realoc(&mut self, save_idx: Index) -> Index {
+    unsafe fn try_realoc(&mut self) {
         let realoc_len = self.cev.capacity() >> 1;
         // density balance if density < cev.len() / 4 then realocate for less capacity
         if realoc_len > Self::MIN_REALOC_LEN
-            && self.cev.len() >= realoc_len
-            && self.density <= realoc_len >> 1
+            && self.cev.len() <= realoc_len >> 1
         {
             // safe because self.density < realoc_len and 0 < realoc_len < cev.len
-            self.realoc(realoc_len, save_idx)
-        } else {
-            save_idx
+            self.realoc(realoc_len)
         }
     }
 
     #[inline]
-    unsafe fn realoc(&mut self, realoc_len: usize, save_idx: Index) -> Index {
+    unsafe fn realoc(&mut self, realoc_len: usize) {
         debug_assert!(self.density < realoc_len);
-
-        let save_idx = self.relax(save_idx);
-        self.reconnect_empty_chain(self.density, realoc_len);
 
         // safe because previous we do relax and all element
         // where index >= density is empty and in this empty
         // no reference
+        let old_len = self.cev.len();
         self.cev.set_len(realoc_len);
         self.cev.shrink_to_fit(); //.shrink_to(realoc_len);
-        save_idx
+        self.cev.set_len(old_len);
     }
 
     #[inline]
-    fn relax(&mut self, mut save_idx: Index) -> Index {
-        let mut left = 0;
-        // self.cev.len > 0 always
-        debug_assert!(self.cev.len() > 0);
-        let mut right = self.cev.len() - 1;
+    unsafe fn swap_remove_mem(&mut self, idx: usize) -> Val<T> {
+        debug_assert!(idx < self.cev.len());
 
-        loop {
-            while left < right && unsafe { !self.is_empty(left) } {
-                left += 1;
-            }
-            while left < right && unsafe { self.is_empty(right) } {
-                right -= 1;
-            }
-            if left < right && unsafe { self.is_empty(left) && !self.is_empty(right) } {
-                // safe because left is empty index and 0 <= left and right < cev.len
-                unsafe { self.swap_empty_mem(left, right) };
-                // valid because Index(right) != Index::None
-                if right == save_idx.0 { save_idx = Index(left) }
-                left += 1;
-                right -= 1;
-            } else {
-                return save_idx;
-            }
-        }
-    }
-
-    #[inline]
-    unsafe fn swap_empty_mem(&mut self, empty_idx: usize, idx: usize) {
-        debug_assert!(
-            idx < self.cev.len()
-            && empty_idx < self.cev.len()
-            && self.is_empty(empty_idx)
-            && !self.is_empty(idx)
-        );
-
-        let idx_val = mem::take(self.cev.get_unchecked_mut(idx));
-        let empty_val = mem::take(self.cev.get_unchecked_mut(empty_idx));
-        *self.cev.get_unchecked_mut(empty_idx) = idx_val;
-        *self.cev.get_unchecked_mut(idx) = empty_val;
-
-        let prev = self.cev.get_unchecked(empty_idx).union.val.prev;
-        let next = self.cev.get_unchecked(empty_idx).union.val.next;
-        self.reconnect(prev, next, Index(empty_idx));
-    }
-
-    #[inline]
-    unsafe fn reconnect_empty_chain(&mut self, start_idx: usize, end: usize) {
-        debug_assert!(
-            start_idx < end
-            && start_idx < self.cev.len()
-            && end <= self.cev.len()
-        );
-
-        for (this, next) in (start_idx..end).zip((start_idx + 1..end).into_iter()) {
-            debug_assert!(self.is_empty(this));
-            self.cev.get_unchecked_mut(this).union.next_empty = Index(next);
-        }
-        self.empty_idx = Index(start_idx);
-        self.cev.get_unchecked_mut(end - 1).union.next_empty = Index::None;
+        let len = self.cev.len();
+        let last = core::ptr::read(self.cev.as_ptr().add(len - 1));
+        let val = self.cev.as_mut_ptr().add(idx);
+        self.cev.set_len(len - 1);
+        core::ptr::replace(val, last)
     }
 }
 
@@ -602,21 +453,13 @@ impl<T: Clone> TsilCev<T> {
             Self::new()
         } else if slice.len() == 1 {
             Self {
-                cev: vec![
-                    Tsil {
-                        union: TsilUnion {
-                            val: Val {
-                                el: mem::ManuallyDrop::new(unsafe { slice.get_unchecked(0).clone() }),
-                                next: Index::None,
-                                prev: Index::None,
-                            }
-                        },
-                        is_empty: false,
-                    },
-                ],
-                empty_idx: Index::None,
-                start: 0,
-                end: 0,
+                cev: vec![Val {
+                    el: unsafe { slice.get_unchecked(0).clone() },
+                    next: Index::None,
+                    prev: Index::None,
+                }],
+                start: Index(0),
+                end: Index(0),
                 density: 1,
             }
         } else {
@@ -625,49 +468,33 @@ impl<T: Clone> TsilCev<T> {
             unsafe { cev.set_len(slice.len()) };
             let mut tsil_cev = Self {
                 cev: cev,
-                empty_idx: Index::None,
-                start: 0,
-                end: slice.len() - 1,
+                start: Index(0),
+                end: Index(slice.len() - 1),
                 density: slice.len(),
             };
             unsafe {
                 // safe because slice.len() > 1
-                *tsil_cev.cev.get_unchecked_mut(0) = Tsil {
-                    union: TsilUnion {
-                        val: Val {
-                            el: mem::ManuallyDrop::new(slice.get_unchecked(0).clone()),
-                            next: Index(1),
-                            prev: Index::None,
-                        },
-                    },
-                    is_empty: false,
+                *tsil_cev.cev.get_unchecked_mut(0) = Val {
+                    el: slice.get_unchecked(0).clone(),
+                    next: Index(1),
+                    prev: Index::None,
                 };
 
                 // safe because slice.len() > 1 and tsil_cev.end >= 1
-                *tsil_cev.cev.get_unchecked_mut(tsil_cev.end) = Tsil {
-                    union: TsilUnion {
-                        val: Val {
-                            el: mem::ManuallyDrop::new(slice.get_unchecked(tsil_cev.end).clone()),
-                            next: Index::None,
-                            prev: Index(tsil_cev.end - 1),
-                        },
-                    },
-                    is_empty: false,
+                *tsil_cev.cev.get_unchecked_mut(tsil_cev.end.0) = Val {
+                    el: slice.get_unchecked(tsil_cev.end.0).clone(),
+                    next: Index::None,
+                    prev: Index(tsil_cev.end.0 - 1),
                 };
 
                 // safe because slice.len() > 1 and tsil_cev.end >= 1
-                tsil_cev.cev.get_unchecked_mut(1..tsil_cev.end).iter_mut()
+                tsil_cev.cev.get_unchecked_mut(1..tsil_cev.end.0).iter_mut()
                     .zip(slice.get_unchecked(1..).iter().zip((1..).into_iter()))
                     .for_each(|(x, (val, current_idx))|
-                        *x = Tsil {
-                            union: TsilUnion {
-                                val: Val {
-                                    el: mem::ManuallyDrop::new(val.clone()),
-                                    next: Index(current_idx + 1),
-                                    prev: Index(current_idx - 1),
-                                },
-                            },
-                            is_empty: false,
+                        *x = Val {
+                            el: val.clone(),
+                            next: Index(current_idx + 1),
+                            prev: Index(current_idx - 1),
                         }
                     );
             }
@@ -684,14 +511,10 @@ pub struct Cursor<'t, T: 't> {
 impl<'t, T: 't> Cursor<'t, T> {
     #[inline]
     pub fn inner(&self) -> Option<&T> {
-        debug_assert!(
-            if !self.idx.is_none() {
-                self.idx.0 < self.tsil_cev.cev.len() && unsafe { !self.tsil_cev.is_empty(self.idx.0) }
-            } else { true }
-        );
+        debug_assert!(self.idx.to_option().map_or(true, |x| x < self.tsil_cev.cev.len()));
 
         // safe because 0 <= Some(self.idx) < cev.len because self.idx traversal on tsil_cev
-        Some(unsafe { &*self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).union.val.el })
+        Some(unsafe { &self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).el })
     }
 
     #[inline]
@@ -709,7 +532,7 @@ impl<'t, T: 't> Cursor<'t, T> {
     pub fn move_next(&mut self) -> &mut Self {
         if !self.idx.is_none() {
             // safe because by previous check and self.idx traversal on tsil_cev
-            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).union.val.next }
+            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).next }
         }
         self
     }
@@ -717,7 +540,7 @@ impl<'t, T: 't> Cursor<'t, T> {
     pub fn move_prev(&mut self) -> &mut Self {
         if !self.idx.is_none() {
             // safe because by previous check and self.idx traversal on tsil_cev
-            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).union.val.prev }
+            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).prev }
         }
         self
     }
@@ -726,7 +549,7 @@ impl<'t, T: 't> Cursor<'t, T> {
     pub fn move_next_length(&mut self, mut len: usize) -> &mut Self {
         while !self.idx.is_none() && len > 0 {
             // safe because by previous check and self.idx traversal on tsil_cev
-            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).union.val.next };
+            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).next };
             len -= 1;
         }
         self
@@ -735,7 +558,7 @@ impl<'t, T: 't> Cursor<'t, T> {
     pub fn move_prev_length(&mut self, mut len: usize) -> &mut Self {
         while !self.idx.is_none() && len > 0 {
             // safe because by previous check and self.idx traversal on tsil_cev
-            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).union.val.prev };
+            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).prev };
             len -= 1;
         }
         self
@@ -744,16 +567,16 @@ impl<'t, T: 't> Cursor<'t, T> {
     #[inline]
     pub fn peek_next(&self) -> Option<&T> {
         // safe because self.idx.to_option()? and self.idx traversal on tsil_cev
-        let next_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).union.val.next };
+        let next_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).next };
         // safe because next_idx.to_option()? and self.idx traversal on tsil_cev
-        Some(unsafe { &*self.tsil_cev.cev.get_unchecked(next_idx.to_option()?).union.val.el })
+        Some(unsafe { &self.tsil_cev.cev.get_unchecked(next_idx.to_option()?).el })
     }
     #[inline]
     pub fn peek_prev(&self) -> Option<&T> {
         // safe because self.idx.to_option()? and self.idx traversal on tsil_cev
-        let prev_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).union.val.prev };
+        let prev_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).prev };
         // safe because prev_idx.to_option()? and self.idx traversal on tsil_cev
-        Some(unsafe { &*self.tsil_cev.cev.get_unchecked(prev_idx.to_option()?).union.val.el })
+        Some(unsafe { &self.tsil_cev.cev.get_unchecked(prev_idx.to_option()?).el })
     }
 
     #[inline]
@@ -788,25 +611,17 @@ pub struct CursorMut<'t, T: 't> {
 impl<'t, T: 't> CursorMut<'t, T> {
     #[inline]
     pub fn inner(&self) -> Option<&T> {
-        debug_assert!(
-            if !self.idx.is_none() {
-                self.idx.0 < self.tsil_cev.cev.len() && unsafe { !self.tsil_cev.is_empty(self.idx.0) }
-            } else { true }
-        );
+        debug_assert!(self.idx.to_option().map_or(true, |x| x < self.tsil_cev.cev.len()));
 
         // safe because 0 <= Some(self.idx) < cev.len because self.idx traversal on tsil_cev
-        Some(unsafe { &*self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).union.val.el })
+        Some(unsafe { &self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).el })
     }
     #[inline]
     pub fn inner_mut(&mut self) -> Option<&mut T> {
-        debug_assert!(
-            if !self.idx.is_none() {
-                self.idx.0 < self.tsil_cev.cev.len() && unsafe { !self.tsil_cev.is_empty(self.idx.0) }
-            } else { true }
-        );
+        debug_assert!(self.idx.to_option().map_or(true, |x| x < self.tsil_cev.cev.len()));
 
         // safe because 0 <= Some(self.idx) < cev.len because self.idx traversal on tsil_cev
-        Some(unsafe { &mut *self.tsil_cev.cev.get_unchecked_mut(self.idx.to_option()?).union.val.el })
+        Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(self.idx.to_option()?).el })
     }
 
     #[inline]
@@ -824,7 +639,7 @@ impl<'t, T: 't> CursorMut<'t, T> {
     pub fn move_next(&mut self) -> &mut Self {
         if !self.idx.is_none() {
             // safe because by previous check and self.idx traversal on tsil_cev
-            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).union.val.next }
+            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).next }
         }
         self
     }
@@ -832,7 +647,7 @@ impl<'t, T: 't> CursorMut<'t, T> {
     pub fn move_prev(&mut self) -> &mut Self {
         if !self.idx.is_none() {
             // safe because by previous check and self.idx traversal on tsil_cev
-            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).union.val.prev }
+            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).prev }
         }
         self
     }
@@ -841,7 +656,7 @@ impl<'t, T: 't> CursorMut<'t, T> {
     pub fn move_next_length(&mut self, mut len: usize) -> &mut Self {
         while !self.idx.is_none() && len > 0 {
             // safe because by previous check and self.idx traversal on tsil_cev
-            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).union.val.next };
+            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).next };
             len -= 1;
         }
         self
@@ -850,7 +665,7 @@ impl<'t, T: 't> CursorMut<'t, T> {
     pub fn move_prev_length(&mut self, mut len: usize) -> &mut Self {
         while !self.idx.is_none() && len > 0 {
             // safe because by previous check and self.idx traversal on tsil_cev
-            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).union.val.prev };
+            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).prev };
             len -= 1;
         }
         self
@@ -859,16 +674,16 @@ impl<'t, T: 't> CursorMut<'t, T> {
     #[inline]
     pub fn peek_next(&mut self) -> Option<&mut T> {
         // safe because self.idx.to_option()? and self.idx traversal on tsil_cev
-        let next_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).union.val.next };
+        let next_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).next };
         // safe because next_idx.to_option()? and self.idx traversal on tsil_cev
-        Some(unsafe { &mut *self.tsil_cev.cev.get_unchecked_mut(next_idx.to_option()?).union.val.el })
+        Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(next_idx.to_option()?).el })
     }
     #[inline]
     pub fn peek_prev(&mut self) -> Option<&mut T> {
         // safe because self.idx.to_option()? and self.idx traversal on tsil_cev
-        let prev_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).union.val.prev };
+        let prev_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).prev };
         // safe because prev_idx.to_option()? and self.idx traversal on tsil_cev
-        Some(unsafe { &mut *self.tsil_cev.cev.get_unchecked_mut(prev_idx.to_option()?).union.val.el })
+        Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(prev_idx.to_option()?).el })
     }
 
     #[inline]
@@ -920,9 +735,8 @@ impl<'t, T: 't> CursorMut<'t, T> {
 
     pub fn insert_before(&mut self, val: T) -> &mut Self {
         if !self.idx.is_none() {
-            let idx = self.tsil_cev.create_empty_index();
-            let prev = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).union.val.prev };
-            unsafe { self.tsil_cev.insert(prev, self.idx, Index(idx), val) };
+            let prev = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).prev };
+            unsafe { self.tsil_cev.insert(prev, self.idx, val) };
         } else {
             self.tsil_cev.push_back(val);
         }
@@ -930,9 +744,8 @@ impl<'t, T: 't> CursorMut<'t, T> {
     }
     pub fn insert_after(&mut self, val: T) -> &mut Self {
         if !self.idx.is_none() {
-            let idx = self.tsil_cev.create_empty_index();
-            let next = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).union.val.next };
-            unsafe { self.tsil_cev.insert(self.idx, next, Index(idx), val) };
+            let next = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).next };
+            unsafe { self.tsil_cev.insert(self.idx, next, val) };
         } else {
             self.tsil_cev.push_front(val);
         }
@@ -980,9 +793,9 @@ impl<'t, T: 't> Iterator for TsilIter<'t, T> {
     fn next(&mut self) -> Option<Self::Item> {
         let x = self.cursor?;
         // safe because cursor traversal in tsil_cev
-        self.cursor = unsafe { self.tsil_cev.cev.get_unchecked(x).union.val.next }.to_option();
+        self.cursor = unsafe { self.tsil_cev.cev.get_unchecked(x).next }.to_option();
         // safe 0 <= x < self.tsil_cev.cev.len because we traversal on tsil_cev
-        Some(unsafe { &*self.tsil_cev.cev.get_unchecked(x).union.val.el })
+        Some(unsafe { &self.tsil_cev.cev.get_unchecked(x).el })
     }
 
     #[inline]
@@ -1003,10 +816,10 @@ impl<'t, T: 't> Iterator for TsilIterMut<'t, T> {
     fn next(&mut self) -> Option<Self::Item> {
         let x = self.cursor?;
         // safe because cursor traversal in tsil_cev
-        self.cursor = unsafe { self.tsil_cev.cev.get_unchecked(x).union.val.next }.to_option();
+        self.cursor = unsafe { self.tsil_cev.cev.get_unchecked(x).next }.to_option();
         // safe because Rust can't deduce that we won't return multiple references to the same value
         // and 0 <= x < self.tsil_cev.cev.len because we traversal on tsil_cev
-        Some(unsafe { &mut *(&mut *self.tsil_cev.cev.get_unchecked_mut(x).union.val.el as *mut _) })
+        Some(unsafe { &mut *(&mut self.tsil_cev.cev.get_unchecked_mut(x).el as *mut _) })
     }
 
     #[inline]
@@ -1039,10 +852,10 @@ impl<'t, T: 't> DoubleEndedIterator for TsilIter<'t, T> {
     fn next_back(&mut self) -> Option<&'t T> {
         let x = self.cursor?;
         // safe because cursor traversal in tsil_cev
-        self.cursor = unsafe { self.tsil_cev.cev.get_unchecked(x).union.val.prev }.to_option();
+        self.cursor = unsafe { self.tsil_cev.cev.get_unchecked(x).prev }.to_option();
         // safe because Rust can't deduce that we won't return multiple references to the same value
         // and 0 <= x < self.tsil_cev.cev.len because we traversal on tsil_cev
-        Some(unsafe { &*self.tsil_cev.cev.get_unchecked(x).union.val.el })
+        Some(unsafe { &self.tsil_cev.cev.get_unchecked(x).el })
     }
 }
 
@@ -1051,10 +864,10 @@ impl<'t, T: 't> DoubleEndedIterator for TsilIterMut<'t, T> {
     fn next_back(&mut self) -> Option<&'t mut T> {
         let x = self.cursor?;
         // safe because cursor traversal in tsil_cev
-        self.cursor = unsafe { self.tsil_cev.cev.get_unchecked(x).union.val.prev }.to_option();
+        self.cursor = unsafe { self.tsil_cev.cev.get_unchecked(x).prev }.to_option();
         // safe because Rust can't deduce that we won't return multiple references to the same value
         // and 0 <= x < self.tsil_cev.cev.len because we traversal on tsil_cev
-        Some(unsafe { &mut *(&mut *self.tsil_cev.cev.get_unchecked_mut(x).union.val.el as *mut _) })
+        Some(unsafe { &mut *(&mut self.tsil_cev.cev.get_unchecked_mut(x).el as *mut _) })
     }
 }
 
@@ -1100,9 +913,7 @@ impl<'t, T: 't> Iterator for CevIter<'t, T> {
             // safe because 0 <= cursor < tsil_cev.cev.len()
             self.cursor = if x + 1 == self.tsil_cev.cev.len() { None } else { Some(x + 1) };
             // safe by previous check
-            if unsafe { !self.tsil_cev.is_empty(x) } {
-                return Some(unsafe { &*self.tsil_cev.cev.get_unchecked(x).union.val.el });
-            }
+            return Some(unsafe { &self.tsil_cev.cev.get_unchecked(x).el });
         }
     }
 
@@ -1128,9 +939,7 @@ impl<'t, T: 't> Iterator for CevIterMut<'t, T> {
             self.cursor = if x + 1 == self.tsil_cev.cev.len() { None } else { Some(x + 1) };
             // safe because Rust can't deduce that we won't return multiple references to the same value
             // safe by previous check
-            if unsafe { !self.tsil_cev.is_empty(x) } {
-                return Some(unsafe { &mut *(&mut *self.tsil_cev.cev.get_unchecked_mut(x).union.val.el as *mut _) });
-            }
+            return Some(unsafe { &mut *(&mut self.tsil_cev.cev.get_unchecked_mut(x).el as *mut _) });
         }
     }
 
@@ -1216,53 +1025,10 @@ impl<T: Ord> Ord for TsilCev<T> {
     }
 }
 
-impl<T> Drop for Tsil<T> {
-    fn drop(&mut self) {
-        if mem::needs_drop::<T>() && !self.is_empty {
-            // safe because check self not empty
-            unsafe {
-                mem::ManuallyDrop::drop(&mut self.union.val.el);
-            }
-        }
-    }
-}
-
-impl<T: Clone> Clone for Val<T> {
-    fn clone(&self) -> Self {
-        Self {
-            el: self.el.clone(),
-            next: self.next,
-            prev: self.prev,
-        }
-    }
-}
-
-impl<T: Clone> Clone for Tsil<T> {
-    fn clone(&self) -> Self {
-        // safe because check is empty or not
-        if self.is_empty {
-            Self {
-                union: TsilUnion {
-                    next_empty: unsafe { self.union.next_empty }
-                },
-                is_empty: true,
-            }
-        } else {
-            Self {
-                union: TsilUnion {
-                    val: unsafe { self.union.val.clone() }
-                },
-                is_empty: false,
-            }
-        }
-    }
-}
-
 impl<T: Clone> Clone for TsilCev<T> {
     fn clone(&self) -> Self {
         Self {
             cev: self.cev.clone(),
-            empty_idx: self.empty_idx,
             start: self.start,
             end: self.end,
             density: self.density,
@@ -1270,7 +1036,6 @@ impl<T: Clone> Clone for TsilCev<T> {
     }
     fn clone_from(&mut self, source: &Self) {
         self.cev.clone_from(&source.cev);
-        self.empty_idx = source.empty_idx;
         self.start = source.start;
         self.end = source.end;
         self.density = source.density;

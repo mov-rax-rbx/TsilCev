@@ -58,11 +58,11 @@ fn test_pop() {
 
     let len = tc.cev_len();
     tc.push_back(0);
-    assert_eq!(tc.cev_len(), len);
+    assert_eq!(tc.cev_len(), len + 1);
     tc.push_back(1000);
-    assert_eq!(tc.cev_len(), len);
+    assert_eq!(tc.cev_len(), len + 2);
     tc.push_back(1500);
-    assert_ne!(tc.cev_len(), len);
+    assert_eq!(tc.cev_len(), len + 3);
 
     tc.pop_back();
     tc.pop_back();
@@ -201,7 +201,7 @@ fn test_remove() {
     tc.push_back(50);
     tc.push_back(100);
     tc.push_back(400);
-    assert_eq!(tc.density(), old_len);
+    assert_eq!(tc.density(), old_len + 3);
 }
 
 
@@ -303,7 +303,7 @@ fn test_remove_balance() {
     }
     let etalon = (50..64).into_iter().map(|x| x).collect::<Vec<_>>();
     assert_eq!(tc.density(), 14);
-    assert_eq!(tc.cev_len(), 64 / 2);
+    assert_eq!(tc.capacity(), 64 / 2);
     assert_eq!(tc.clone().to_vec(), etalon);
 
     let old_dencity = tc.density();
