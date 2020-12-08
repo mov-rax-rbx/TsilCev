@@ -1,3 +1,9 @@
+#![no_std]
+
+#[macro_use]
+extern crate alloc;
+
+use alloc::vec::Vec;
 use core::hash::{Hash, Hasher};
 use core::cmp::Ordering;
 use crate::index::Index;
