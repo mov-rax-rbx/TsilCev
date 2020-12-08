@@ -31,12 +31,11 @@ struct Val<T> {
     prev: Index,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TsilCev<T> {
     cev: Vec<Val<T>>,
     start: Index,
     end: Index,
-    density: usize,
 }
 
 impl<T> TsilCev<T> {
@@ -48,7 +47,6 @@ impl<T> TsilCev<T> {
             cev: Vec::with_capacity(cap),
             start: Index::None,
             end: Index::None,
-            density: 0,
         }
     }
 
@@ -57,7 +55,6 @@ impl<T> TsilCev<T> {
             cev: Vec::new(),
             start: Index::None,
             end: Index::None,
-            density: 0,
         }
     }
 
@@ -65,7 +62,6 @@ impl<T> TsilCev<T> {
         self.cev.clear();
         self.start = Index::None;
         self.end = Index::None;
-        self.density = 0;
     }
 
     #[inline]
@@ -174,36 +170,36 @@ impl<T> TsilCev<T> {
     }
 
     pub fn cursor_idx(&self, idx: usize) -> Cursor<'_, T> {
-        if idx >= self.density() {
+        if idx >= self.len() {
             Cursor {
                 tsil_cev: self,
                 idx: Index::None
             }
         }
-        else if idx <= self.density() >> 1 {
+        else if idx <= self.len() >> 1 {
             let mut cursor = self.cursor_front();
             cursor.move_next_length(idx);
             cursor
         } else {
-            let new_len = self.density() - idx - 1;
+            let new_len = self.len() - idx - 1;
             let mut cursor = self.cursor_back();
             cursor.move_prev_length(new_len);
             cursor
         }
     }
     pub fn cursor_idx_mut(&mut self, idx: usize) -> CursorMut<'_, T> {
-        if idx >= self.density() {
+        if idx >= self.len() {
             CursorMut {
                 tsil_cev: self,
                 idx: Index::None
             }
         }
-        else if idx <= self.density() >> 1 {
+        else if idx <= self.len() >> 1 {
             let mut cursor = self.cursor_front_mut();
             cursor.move_next_length(idx);
             cursor
         } else {
-            let new_len = self.density() - idx - 1;
+            let new_len = self.len() - idx - 1;
             let mut cursor = self.cursor_back_mut();
             cursor.move_prev_length(new_len);
             cursor
@@ -215,7 +211,7 @@ impl<T> TsilCev<T> {
         // self.into_iter().map(move |x| x).collect::<Vec<_>>()
 
         // Faster then previous?
-        let mut ret = Vec::with_capacity(self.density);
+        let mut ret = Vec::with_capacity(self.cev.len());
         let mut cursor = self.start().to_option();
         while let Some(x) = cursor {
             // safe because cursor traversal in tsil_cev
@@ -228,15 +224,11 @@ impl<T> TsilCev<T> {
     }
 
     #[inline]
-    pub fn density(&self) -> usize {
-        self.density
-    }
-    #[inline]
     pub fn capacity(&self) -> usize {
         self.cev.capacity()
     }
     #[inline]
-    pub fn cev_len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.cev.len()
     }
 
@@ -252,7 +244,20 @@ impl<T> TsilCev<T> {
     }
 
     pub fn push_back(&mut self, val: T) {
-        unsafe { self.insert_back(val) };
+        let idx = self.cev.len();
+        self.cev.push(Val {
+            el: val,
+            next: Index::None,
+            prev: self.end,
+        });
+        unsafe { self.reconnect(self.end, Index::None, Index(idx)) };
+        /*if !self.end().is_none() {
+            unsafe { self.cev.get_unchecked_mut(self.end.0).next = Index(idx) };
+        }
+        self.end = Index(idx);
+        if self.start().is_none() {
+            self.start = Index(idx);
+        };*/
     }
 
     pub fn pop_back(&mut self) -> Option<T> {
@@ -262,7 +267,20 @@ impl<T> TsilCev<T> {
     }
 
     pub fn push_front(&mut self, val: T) {
-        unsafe { self.insert_front(val) };
+        let idx = self.cev.len();
+        self.cev.push(Val {
+            el: val,
+            next: self.start,
+            prev: Index::None,
+        });
+        unsafe { self.reconnect(Index::None, self.start, Index(idx)) };
+        /*if !self.start().is_none() {
+            unsafe { self.cev.get_unchecked_mut(self.start.0).prev = Index(idx) };
+        }
+        self.start = Index(idx);
+        if self.end().is_none() {
+            self.end = Index(idx);
+        }*/
     }
 
     pub fn pop_front(&mut self) -> Option<T> {
@@ -272,52 +290,11 @@ impl<T> TsilCev<T> {
     }
 
     #[inline]
-    unsafe fn insert_back(&mut self, val: T) {
-
-        let idx = self.cev.len();
-        self.cev.push(Val {
-            el: val,
-            next: Index::None,
-            prev: self.end,
-        });
-        // safe because self.end index in cev and cev.size > 0
-        if !self.end().is_none() {
-            self.cev.get_unchecked_mut(self.end.0).next = Index(idx);
-        }
-        self.end = Index(idx);
-        if self.start().is_none() {
-            self.start = Index(idx);
-        }
-        self.density += 1;
-    }
-
-    #[inline]
-    unsafe fn insert_front(&mut self, val: T) {
-
-        let idx = self.cev.len();
-        self.cev.push(Val {
-            el: val,
-            next: self.start,
-            prev: Index::None,
-        });
-        // safe because self.start index in cev and cev.size > 0
-        if !self.start().is_none() {
-            self.cev.get_unchecked_mut(self.start.0).prev = Index(idx);
-        }
-        self.start = Index(idx);
-        if self.end().is_none() {
-            self.end = Index(idx);
-        }
-        self.density += 1;
-    }
-
-    #[inline]
     unsafe fn insert(&mut self, prev: Index, next: Index, val: T) {
         debug_assert!(
             prev.to_option().map_or(true, |x| x < self.cev.len())
             && next.to_option().map_or(true, |x| x < self.cev.len())
         );
-        // safe because 0 <= currend < cev.len
         let current = self.cev.len();
         self.cev.push(Val {
             el: val,
@@ -325,7 +302,6 @@ impl<T> TsilCev<T> {
             prev: prev,
         });
         self.reconnect(prev, next, Index(current));
-        self.density += 1;
     }
 
     #[inline]
@@ -386,23 +362,18 @@ impl<T> TsilCev<T> {
 
     #[inline]
     unsafe fn make_empty(&mut self, idx: usize) -> (T, Index) {
-        debug_assert!(idx < self.cev.len() && self.density() > 0);
+        debug_assert!(idx < self.cev.len() && self.len() > 0);
 
         let prev = self.cev.get_unchecked(idx).prev;
         let next = self.cev.get_unchecked(idx).next;
         self.connect(prev, next);
-        let ret =
-            if idx + 1 != self.cev.len() {
-                let ret = self.swap_remove_mem(idx).el;
-                let prev = self.cev.get_unchecked(idx).prev;
-                let next = self.cev.get_unchecked(idx).next;
-                self.reconnect(prev, next, Index(idx));
-                ret
-            } else {
-                self.cev.pop().unwrap().el
-            };
-
-        self.density -= 1;
+        if idx + 1 != self.cev.len() {
+            self.swap_mem(idx, self.cev.len() - 1);
+            let prev = self.cev.get_unchecked(idx).prev;
+            let next = self.cev.get_unchecked(idx).next;
+            self.reconnect(prev, next, Index(idx));
+        }
+        let ret = self.remove_last_mem().el;
 
         // safe because we know that index reorder and save index (save_idx)
         self.try_realoc();
@@ -424,7 +395,7 @@ impl<T> TsilCev<T> {
 
     #[inline]
     unsafe fn realoc(&mut self, realoc_len: usize) {
-        debug_assert!(self.density < realoc_len);
+        debug_assert!(self.len() <= realoc_len);
 
         // safe because previous we do relax and all element
         // where index >= density is empty and in this empty
@@ -436,14 +407,22 @@ impl<T> TsilCev<T> {
     }
 
     #[inline]
-    unsafe fn swap_remove_mem(&mut self, idx: usize) -> Val<T> {
-        debug_assert!(idx < self.cev.len());
+    unsafe fn swap_mem(&mut self, x: usize, y: usize) {
+        debug_assert!(x < self.cev.len() && y < self.cev.len());
 
-        let len = self.cev.len();
-        let last = core::ptr::read(self.cev.as_ptr().add(len - 1));
-        let val = self.cev.as_mut_ptr().add(idx);
-        self.cev.set_len(len - 1);
-        core::ptr::replace(val, last)
+        let x_val = self.cev.as_mut_ptr().add(x);
+        let y_val = self.cev.as_mut_ptr().add(y);
+        core::ptr::swap(x_val, y_val);
+    }
+
+    #[inline]
+    unsafe fn remove_last_mem(&mut self) -> Val<T> {
+        debug_assert!(self.cev.len() > 0);
+
+        let last = self.cev.len() - 1;
+        let last_val = self.cev.as_ptr().add(last);
+        self.cev.set_len(last);
+        core::ptr::read(last_val)
     }
 }
 
@@ -460,7 +439,6 @@ impl<T: Clone> TsilCev<T> {
                 }],
                 start: Index(0),
                 end: Index(0),
-                density: 1,
             }
         } else {
             let mut cev = Vec::with_capacity(slice.len());
@@ -470,7 +448,6 @@ impl<T: Clone> TsilCev<T> {
                 cev: cev,
                 start: Index(0),
                 end: Index(slice.len() - 1),
-                density: slice.len(),
             };
             unsafe {
                 // safe because slice.len() > 1
@@ -800,7 +777,7 @@ impl<'t, T: 't> Iterator for TsilIter<'t, T> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.tsil_cev.density(), Some(self.tsil_cev.density()))
+        (self.tsil_cev.len(), Some(self.tsil_cev.len()))
     }
 
     #[inline]
@@ -824,7 +801,7 @@ impl<'t, T: 't> Iterator for TsilIterMut<'t, T> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.tsil_cev.density(), Some(self.tsil_cev.density()))
+        (self.tsil_cev.len(), Some(self.tsil_cev.len()))
     }
 
     #[inline]
@@ -843,7 +820,7 @@ impl<T> Iterator for TsilIntoIter<T> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.tsil_cev.density(), Some(self.tsil_cev.density()))
+        (self.tsil_cev.len(), Some(self.tsil_cev.len()))
     }
 }
 
@@ -919,7 +896,7 @@ impl<'t, T: 't> Iterator for CevIter<'t, T> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.tsil_cev.density(), Some(self.tsil_cev.density()))
+        (self.tsil_cev.len(), Some(self.tsil_cev.len()))
     }
 
     #[inline]
@@ -945,7 +922,7 @@ impl<'t, T: 't> Iterator for CevIterMut<'t, T> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.tsil_cev.density(), Some(self.tsil_cev.density()))
+        (self.tsil_cev.len(), Some(self.tsil_cev.len()))
     }
 
     #[inline]
@@ -1001,7 +978,7 @@ impl<'t, T: 't + Copy> Extend<&'t T> for TsilCev<T> {
 impl<T: PartialEq> PartialEq for TsilCev<T> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.density() == other.density() && self.iter_tsil().eq(other)
+        self.len() == other.len() && self.iter_tsil().eq(other)
     }
     #[inline]
     fn ne(&self, other: &Self) -> bool {
@@ -1025,26 +1002,24 @@ impl<T: Ord> Ord for TsilCev<T> {
     }
 }
 
-impl<T: Clone> Clone for TsilCev<T> {
-    fn clone(&self) -> Self {
-        Self {
-            cev: self.cev.clone(),
-            start: self.start,
-            end: self.end,
-            density: self.density,
-        }
-    }
-    fn clone_from(&mut self, source: &Self) {
-        self.cev.clone_from(&source.cev);
-        self.start = source.start;
-        self.end = source.end;
-        self.density = source.density;
-    }
-}
+// impl<T: Clone> Clone for TsilCev<T> {
+//     fn clone(&self) -> Self {
+//         Self {
+//             cev: self.cev.clone(),
+//             start: self.start,
+//             end: self.end,
+//         }
+//     }
+//     fn clone_from(&mut self, source: &Self) {
+//         self.cev.clone_from(&source.cev);
+//         self.start = source.start;
+//         self.end = source.end;
+//     }
+// }
 
 impl<T: Hash> Hash for TsilCev<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.density().hash(state);
+        self.len().hash(state);
         for elt in self {
             elt.hash(state);
         }

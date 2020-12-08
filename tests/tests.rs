@@ -22,7 +22,7 @@ fn test_push_back_front() {
     let v = tc.iter_tsil().map(|x| x.clone()).collect::<Vec<_>>();
     let etalon = vec![500, 501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510, 508];
     assert_eq!(v, etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 }
@@ -52,17 +52,17 @@ fn test_pop() {
     let v = tc.iter_tsil().map(|x| x.clone()).collect::<Vec<_>>();
     let etalon = vec![501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510];
     assert_eq!(v, etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
-    let len = tc.cev_len();
+    let len = tc.len();
     tc.push_back(0);
-    assert_eq!(tc.cev_len(), len + 1);
+    assert_eq!(tc.len(), len + 1);
     tc.push_back(1000);
-    assert_eq!(tc.cev_len(), len + 2);
+    assert_eq!(tc.len(), len + 2);
     tc.push_back(1500);
-    assert_eq!(tc.cev_len(), len + 3);
+    assert_eq!(tc.len(), len + 3);
 
     tc.pop_back();
     tc.pop_back();
@@ -71,7 +71,7 @@ fn test_pop() {
     let v = tc.iter_tsil().map(|x| x.clone()).collect::<Vec<_>>();
     let etalon = vec![501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510];
     assert_eq!(v, etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
@@ -83,7 +83,7 @@ fn test_pop() {
     let v = tc.iter_tsil().map(|x| x.clone()).collect::<Vec<_>>();
     let etalon = vec![510, 508, 500, 501, 502, 503, 504, 510];
     assert_eq!(v, etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
@@ -94,24 +94,24 @@ fn test_pop() {
         501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510,
     ]);
     let mut tc_pop_back = tc.clone();
-    while tc_pop_back.density() != 0 {
+    while tc_pop_back.len() != 0 {
         tc_pop_back.pop_back();
     }
 
     let etalon = Vec::<usize>::new();
     assert_eq!(tc_pop_back.clone().to_vec(), etalon);
-    assert_eq!(tc_pop_back.density(), etalon.len());
+    assert_eq!(tc_pop_back.len(), etalon.len());
     assert_eq!(tc_pop_back.front(), etalon.first());
     assert_eq!(tc_pop_back.back(), etalon.last());
 
     let mut tc_pop_front = tc.clone();
-    while tc_pop_front.density() != 0 {
+    while tc_pop_front.len() != 0 {
         tc_pop_front.pop_front();
     }
 
     let etalon = Vec::<usize>::new();
     assert_eq!(tc_pop_front.clone().to_vec(), etalon);
-    assert_eq!(tc_pop_front.density(), etalon.len());
+    assert_eq!(tc_pop_front.len(), etalon.len());
     assert_eq!(tc_pop_front.front(), etalon.first());
     assert_eq!(tc_pop_front.back(), etalon.last());
 }
@@ -134,7 +134,7 @@ fn test_tsil_iter_stil() {
     let etalon = vec![500, 510, 508, 500, 501, 502];
 
     assert_eq!(v, etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 }
@@ -159,7 +159,7 @@ fn test_tsil_iter_cev() {
     etalon.sort();
 
     assert_eq!(v, etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
 }
 
 #[test]
@@ -176,7 +176,7 @@ fn test_remove() {
     let v = tc.iter_tsil().map(|x| x.clone()).collect::<Vec<_>>();
     let etalon = vec![500, 510, 508, 500, 501, 502];
     assert_eq!(v, etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
@@ -187,21 +187,21 @@ fn test_remove() {
     let etalon = vec![510, 508, 502];
 
     assert_eq!(v, etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
-    let old_len = tc.cev_len();
+    let old_len = tc.len();
     tc.pop_back();
     tc.pop_back();
-    assert_ne!(tc.density(), old_len);
+    assert_ne!(tc.len(), old_len);
     tc.push_back(5);
     tc.push_back(10);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     tc.push_back(50);
     tc.push_back(100);
     tc.push_back(400);
-    assert_eq!(tc.density(), old_len + 3);
+    assert_eq!(tc.len(), old_len + 3);
 }
 
 
@@ -229,7 +229,7 @@ fn test_insert() {
     let v = tc.iter_tsil().map(|x| x.clone()).collect::<Vec<_>>();
     let etalon = vec![500, 501, 502, 503, 504, 510, 1000, 508, 500, 501, 502, 503, 504, 510, 508];
     assert_eq!(v, etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
@@ -246,7 +246,7 @@ fn test_insert() {
     let v = tc.iter_tsil().map(|x| x.clone()).collect::<Vec<_>>();
     let etalon = vec![0, 500, 501, 1500, 502, 503, 504, 510, 1000, 508, 500, 501, 502, 503, 504, 510, 508];
     assert_eq!(v, etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
@@ -263,7 +263,7 @@ fn test_insert() {
     let v = tc.iter_tsil().map(|x| x.clone()).collect::<Vec<_>>();
     let etalon = vec![0, 500, 501, 1500, 502, 503, 504, 510, 1000, 508, 500, 501, 502, 503, 504, 1500, 510, 0, 508];
     assert_eq!(v, etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
@@ -273,16 +273,16 @@ fn test_insert() {
     let etalon = vec![200, 0, 500, 501, 1500, 502, 503, 504, 510, 1000, 508, 500, 501, 502, 503, 504, 1500, 510, 0, 508, 800];
 
     assert_eq!(v, etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
-    let old_len = tc.cev_len();
+    let old_len = tc.len();
     tc.pop_back();
     tc.pop_back();
-    assert_ne!(tc.density(), old_len);
+    assert_ne!(tc.len(), old_len);
     tc.push_back(5);
     tc.push_back(10);
-    assert_eq!(tc.density(), old_len);
+    assert_eq!(tc.len(), old_len);
 }
 
 #[test]
@@ -302,17 +302,17 @@ fn test_remove_balance() {
         }
     }
     let etalon = (50..64).into_iter().map(|x| x).collect::<Vec<_>>();
-    assert_eq!(tc.density(), 14);
+    assert_eq!(tc.len(), 14);
     assert_eq!(tc.capacity(), 64 / 2);
     assert_eq!(tc.clone().to_vec(), etalon);
 
-    let old_dencity = tc.density();
+    let old_dencity = tc.len();
     tc.pop_back();
     tc.pop_back();
-    assert_eq!(tc.density(), old_dencity - 2);
+    assert_eq!(tc.len(), old_dencity - 2);
     tc.push_back(5);
     tc.push_back(10);
-    assert_eq!(tc.density(), old_dencity);
+    assert_eq!(tc.len(), old_dencity);
 }
 
 #[test]
@@ -334,7 +334,7 @@ fn test_clear() {
     let etalon = vec![500, 50];
 
     assert_eq!(tc.clone().to_vec(), etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
@@ -351,7 +351,7 @@ fn test_clear() {
     let etalon = vec![500, 50];
 
     assert_eq!(tc.clone().to_vec(), etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
@@ -369,7 +369,7 @@ fn test_clear() {
     let etalon = vec![500, 50];
 
     assert_eq!(tc.clone().to_vec(), etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 }
@@ -433,7 +433,7 @@ fn test_from_slice() {
     let etalon = vec![500, 501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510, 508];
     let mut tc = TsilCev::from_slice(&etalon);
     assert_eq!(tc.clone().to_vec(), etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
@@ -454,28 +454,28 @@ fn test_from_slice() {
         100, 200, 300, 400
     ];
     assert_eq!(tc.clone().to_vec(), etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
     let etalon = vec![500, 501];
     let tc = TsilCev::from_slice(&etalon);
     assert_eq!(tc.clone().to_vec(), etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
     let etalon = vec![500];
     let tc = TsilCev::from_slice(&etalon);
     assert_eq!(tc.clone().to_vec(), etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
     let etalon = Vec::<usize>::new();
     let tc = TsilCev::from_slice(&etalon);
     assert_eq!(tc.clone().to_vec(), etalon);
-    assert_eq!(tc.density(), etalon.len());
+    assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 }
