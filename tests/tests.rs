@@ -479,3 +479,46 @@ fn test_from_slice() {
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 }
+
+#[test]
+fn test_drain_filter() {
+    let mut tc = TsilCev::new();
+    tc.push_back(500);
+    tc.push_back(501);
+    tc.push_back(502);
+
+    tc.push_front(508);
+    tc.push_front(510);
+    for _ in 0..128 {
+        tc.push_front(500);
+    }
+
+    let del_500 = tc.drain_filter(|x| *x == 500).collect::<Vec<_>>();
+    assert_eq!(del_500, [500].repeat(129));
+    assert_eq!(tc.clone().to_vec(), vec![510, 508, 501, 502]);
+
+    tc.pop_back();
+    tc.pop_back();
+    assert_eq!(tc.clone().to_vec(), vec![510, 508]);
+    tc.push_back(1000);
+    tc.push_back(1001);
+    tc.push_back(1002);
+    tc.push_back(1003);
+    tc.push_back(1004);
+    assert_eq!(tc.clone().to_vec(), vec![510, 508, 1000, 1001, 1002, 1003, 1004]);
+    tc.pop_front();
+    tc.pop_front();
+    assert_eq!(tc.clone().to_vec(), vec![1000, 1001, 1002, 1003, 1004]);
+    tc.cursor_front_mut().remove().remove();
+    assert_eq!(tc.clone().to_vec(), vec![1002, 1003, 1004]);
+    tc.cursor_back_mut().move_prev_length(2).remove().remove();
+    assert_eq!(tc.clone().to_vec(), vec![1004]);
+
+    assert_eq!(tc.cursor_back_mut().move_prev_length(2).inner(), None);
+    assert_eq!(tc.cursor_front_mut().move_prev_length(2).inner(), None);
+    assert_eq!(tc.cursor_back().move_prev_length(2).inner(), None);
+    assert_eq!(tc.cursor_front_mut().move_prev_length(2).inner(), None);
+    assert_eq!(tc.clone().to_vec(), vec![1004]);
+    tc.cursor_front_mut().insert_before(0).insert_after(1);
+    assert_eq!(tc.clone().to_vec(), vec![0, 1004, 1]);
+}

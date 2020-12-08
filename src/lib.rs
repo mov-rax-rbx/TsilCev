@@ -108,6 +108,19 @@ impl<T> TsilCev<T> {
     }
 
     #[inline]
+    pub fn drain_filter<F>(&mut self, pred: F) -> DrainFilter<T, F>
+    where
+        F: FnMut(&mut T) -> bool,
+    {
+        let len = self.cev.len();
+        DrainFilter {
+            cursor: self.cursor_front_mut(),
+            pred: pred,
+            old_len: len,
+        }
+    }
+
+    #[inline]
     pub fn front(&self) -> Option<&T> {
         // safe because check back not empty
         Some(unsafe { &self.cev.get_unchecked(self.start().to_option()?).el })
@@ -244,14 +257,14 @@ impl<T> TsilCev<T> {
     }
 
     pub fn push_back(&mut self, val: T) {
-        let idx = self.cev.len();
+        unsafe { self.insert(self.end, Index::None, val) };
+        /*let idx = self.cev.len();
         self.cev.push(Val {
             el: val,
             next: Index::None,
             prev: self.end,
         });
-        unsafe { self.reconnect(self.end, Index::None, Index(idx)) };
-        /*if !self.end().is_none() {
+        if !self.end().is_none() {
             unsafe { self.cev.get_unchecked_mut(self.end.0).next = Index(idx) };
         }
         self.end = Index(idx);
@@ -267,14 +280,14 @@ impl<T> TsilCev<T> {
     }
 
     pub fn push_front(&mut self, val: T) {
-        let idx = self.cev.len();
+        unsafe { self.insert(Index::None, self.start, val) };
+        /*let idx = self.cev.len();
         self.cev.push(Val {
             el: val,
             next: self.start,
             prev: Index::None,
         });
-        unsafe { self.reconnect(Index::None, self.start, Index(idx)) };
-        /*if !self.start().is_none() {
+        if !self.start().is_none() {
             unsafe { self.cev.get_unchecked_mut(self.start.0).prev = Index(idx) };
         }
         self.start = Index(idx);
@@ -336,7 +349,7 @@ impl<T> TsilCev<T> {
         debug_assert!(
             prev.to_option().map_or(true, |x| x < self.cev.len())
             && next.to_option().map_or(true, |x| x < self.cev.len())
-            && current.to_option().map_or(true, |x| x < self.cev.len())
+            && current.to_option().map_or(false, |x| x < self.cev.len())
         );
         // safe because 0 <= x and y and z < cev.len
         match (prev.to_option(), current.to_option(), next.to_option()) {
@@ -742,8 +755,9 @@ impl<'t, T: 't> CursorMut<'t, T> {
     }
 
     #[inline]
-    pub fn remove(&mut self) {
+    pub fn remove(&mut self) -> &mut Self {
         let _ = self.owned();
+        self
     }
 }
 
@@ -857,17 +871,15 @@ impl<T> DoubleEndedIterator for TsilIntoIter<T> {
 
 impl<'t, T: 't> ExactSizeIterator for TsilIter<'t, T> {}
 impl<'t, T: 't> ExactSizeIterator for TsilIterMut<'t, T> {}
-impl<T> ExactSizeIterator for TsilIntoIter<T> {}
-
 impl<'t, T: 't> ExactSizeIterator for CevIter<'t, T> {}
 impl<'t, T: 't> ExactSizeIterator for CevIterMut<'t, T> {}
+impl<T> ExactSizeIterator for TsilIntoIter<T> {}
 
-impl<'t, T: 't> std::iter::FusedIterator for TsilIter<'t, T> {}
-impl<'t, T: 't> std::iter::FusedIterator for TsilIterMut<'t, T> {}
-impl<T> std::iter::FusedIterator for TsilIntoIter<T> {}
-
-impl<'t, T: 't> std::iter::FusedIterator for CevIter<'t, T> {}
-impl<'t, T: 't> std::iter::FusedIterator for CevIterMut<'t, T> {}
+impl<'t, T: 't> core::iter::FusedIterator for TsilIter<'t, T> {}
+impl<'t, T: 't> core::iter::FusedIterator for TsilIterMut<'t, T> {}
+impl<'t, T: 't> core::iter::FusedIterator for CevIter<'t, T> {}
+impl<'t, T: 't> core::iter::FusedIterator for CevIterMut<'t, T> {}
+impl<T> core::iter::FusedIterator for TsilIntoIter<T> {}
 
 pub struct CevIterMut<'t, T: 't> {
     tsil_cev: &'t mut TsilCev<T>,
@@ -928,6 +940,36 @@ impl<'t, T: 't> Iterator for CevIterMut<'t, T> {
     #[inline]
     fn last(self) -> Option<&'t mut T> {
         self.tsil_cev.back_mut()
+    }
+}
+
+pub struct DrainFilter<'t, T: 't, F: 't>
+where
+    F: FnMut(&mut T) -> bool,
+{
+    cursor: CursorMut<'t, T>,
+    pred: F,
+    old_len: usize,
+}
+
+impl<T, F> Iterator for DrainFilter<'_, T, F>
+where
+    F: FnMut(&mut T) -> bool,
+{
+    type Item = T;
+
+    fn next(&mut self) -> Option<T> {
+        while let Some(x) = self.cursor.inner_mut() {
+            if (self.pred)(x) {
+                return self.cursor.owned();
+            }
+            self.cursor.move_next();
+        }
+        None
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some(self.old_len - self.cursor.tsil_cev.len()))
     }
 }
 
