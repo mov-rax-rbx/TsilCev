@@ -28,16 +28,22 @@ pub(crate) mod index {
             }
         }
     }
+    impl Default for Index {
+        #[inline]
+        fn default() -> Self {
+            Index::None
+        }
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 struct Val<T> {
     el: T,
     next: Index,
     prev: Index,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct TsilCev<T> {
     cev: Vec<Val<T>>,
     start: Index,
@@ -101,26 +107,39 @@ impl<T> TsilCev<T> {
     pub fn iter_cev(&self) -> CevIter<T> {
         CevIter {
             tsil_cev: self,
-            cursor: if self.cev.is_empty() { None } else { Some(0) },
+            pos: 0,
         }
     }
     #[inline]
     pub fn iter_cev_mut(&mut self) -> CevIterMut<T> {
-        let is_empty = self.cev.is_empty();
         CevIterMut {
             tsil_cev: self,
-            cursor: if is_empty { None } else { Some(0) },
+            pos: 0,
         }
     }
 
     #[inline]
-    pub fn drain_filter<F>(&mut self, pred: F) -> DrainFilter<T, F>
+    pub fn drain_filter_tsil<F>(&mut self, pred: F) -> DrainFilterTsil<T, F>
     where
         F: FnMut(&mut T) -> bool,
     {
         let len = self.cev.len();
-        DrainFilter {
+        DrainFilterTsil {
             cursor: self.cursor_front_mut(),
+            pred: pred,
+            old_len: len,
+        }
+    }
+
+    #[inline]
+    pub fn drain_filter_cev<F>(&mut self, pred: F) -> DrainFilterCev<T, F>
+    where
+        F: FnMut(&mut T) -> bool,
+    {
+        let len = self.cev.len();
+        DrainFilterCev {
+            tsil_cev: self,
+            pos: 0,
             pred: pred,
             old_len: len,
         }
@@ -188,7 +207,7 @@ impl<T> TsilCev<T> {
         }
     }
 
-    pub fn cursor_idx(&self, idx: usize) -> Cursor<'_, T> {
+    pub fn cursor_idx_tsil(&self, idx: usize) -> Cursor<'_, T> {
         if idx >= self.len() {
             Cursor {
                 tsil_cev: self,
@@ -206,7 +225,7 @@ impl<T> TsilCev<T> {
             cursor
         }
     }
-    pub fn cursor_idx_mut(&mut self, idx: usize) -> CursorMut<'_, T> {
+    pub fn cursor_idx_tsil_mut(&mut self, idx: usize) -> CursorMut<'_, T> {
         if idx >= self.len() {
             CursorMut {
                 tsil_cev: self,
@@ -594,7 +613,8 @@ impl<'t, T: 't> Cursor<'t, T> {
     pub fn iter_cev(&self) -> CevIter<T> {
         CevIter {
             tsil_cev: self.tsil_cev,
-            cursor: self.idx.to_option(),
+            // safe because self.tsil_len < usize::MAX
+            pos: self.idx.0,
         }
     }
 }
@@ -718,14 +738,16 @@ impl<'t, T: 't> CursorMut<'t, T> {
     pub fn iter_cev(&self) -> CevIter<T> {
         CevIter {
             tsil_cev: self.tsil_cev,
-            cursor: self.idx.to_option(),
+            // safe because self.tsil_len < usize::MAX
+            pos: self.idx.0,
         }
     }
     #[inline]
     pub fn iter_cev_mut(&mut self) -> CevIterMut<T> {
         CevIterMut {
             tsil_cev: self.tsil_cev,
-            cursor: self.idx.to_option(),
+            // safe because self.tsil_len < usize::MAX
+            pos: self.idx.0,
         }
     }
 
@@ -889,13 +911,13 @@ impl<T> core::iter::FusedIterator for TsilIntoIter<T> {}
 
 pub struct CevIterMut<'t, T: 't> {
     tsil_cev: &'t mut TsilCev<T>,
-    cursor: Option<usize>,
+    pos: usize,
 }
 
 #[derive(Clone)]
 pub struct CevIter<'t, T: 't> {
     tsil_cev: &'t TsilCev<T>,
-    cursor: Option<usize>,
+    pos: usize,
 }
 
 impl<'t, T: 't> Iterator for CevIter<'t, T> {
@@ -903,13 +925,13 @@ impl<'t, T: 't> Iterator for CevIter<'t, T> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let x = self.cursor?;
-            // safe because 0 <= cursor < tsil_cev.cev.len()
-            self.cursor = if x + 1 == self.tsil_cev.cev.len() { None } else { Some(x + 1) };
+        if self.pos < self.tsil_cev.len() {
+            let x = self.pos;
+            self.pos += 1;
             // safe by previous check
             return Some(unsafe { &self.tsil_cev.cev.get_unchecked(x).el });
         }
+        None
     }
 
     #[inline]
@@ -928,14 +950,14 @@ impl<'t, T: 't> Iterator for CevIterMut<'t, T> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let x = self.cursor?;
-            // safe because 0 <= cursor < tsil_cev.cev.len()
-            self.cursor = if x + 1 == self.tsil_cev.cev.len() { None } else { Some(x + 1) };
+        if self.pos < self.tsil_cev.len() {
+            let x = self.pos;
+            self.pos += 1;
             // safe because Rust can't deduce that we won't return multiple references to the same value
             // safe by previous check
             return Some(unsafe { &mut *(&mut self.tsil_cev.cev.get_unchecked_mut(x).el as *mut _) });
         }
+        None
     }
 
     #[inline]
@@ -949,7 +971,7 @@ impl<'t, T: 't> Iterator for CevIterMut<'t, T> {
     }
 }
 
-pub struct DrainFilter<'t, T: 't, F: 't>
+pub struct DrainFilterTsil<'t, T: 't, F: 't>
 where
     F: FnMut(&mut T) -> bool,
 {
@@ -958,7 +980,7 @@ where
     old_len: usize,
 }
 
-impl<T, F> Iterator for DrainFilter<'_, T, F>
+impl<T, F> Iterator for DrainFilterTsil<'_, T, F>
 where
     F: FnMut(&mut T) -> bool,
 {
@@ -976,6 +998,38 @@ where
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         (0, Some(self.old_len - self.cursor.tsil_cev.len()))
+    }
+}
+
+pub struct DrainFilterCev<'t, T: 't, F: 't>
+where
+    F: FnMut(&mut T) -> bool,
+{
+    tsil_cev: &'t mut TsilCev<T>,
+    pos: usize,
+    pred: F,
+    old_len: usize,
+}
+
+impl<T, F> Iterator for DrainFilterCev<'_, T, F>
+where
+    F: FnMut(&mut T) -> bool,
+{
+    type Item = T;
+
+    fn next(&mut self) -> Option<T> {
+        while self.pos < self.tsil_cev.len() {
+            let x = unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(self.pos).el };
+            if (self.pred)(x) {
+                return Some(unsafe { self.tsil_cev.make_empty(self.pos) }.0);
+            }
+            self.pos += 1;
+        }
+        None
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some(self.old_len - self.tsil_cev.len()))
     }
 }
 
