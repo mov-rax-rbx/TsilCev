@@ -1,3 +1,16 @@
+//! Implementation of the linked list on Vec. Has an
+//! amortized insertion and removal time per constant
+//! due to linear placement in memory. It is added in
+//! the same way as in Vec, but at deletion the element
+//! moves to the end and something like pop is called,
+//! and if the length equals capacity / 4 then the vector
+//! is reallocated and the capacity == 2 * length
+//! invariant is always executed.
+
+//! TsilCev has 2 types of iterators Tsil and Cev.
+//! Tlist - iterating as in LinkedList. Cev - iterating
+//! as in Vec (a bit faster because memory access is sequential).
+
 #![no_std]
 
 #[macro_use]
@@ -8,6 +21,10 @@ use core::hash::{Hash, Hasher};
 use core::cmp::Ordering;
 use crate::index::Index;
 
+// It should be Option<usize>, but in order to save
+// memory and avoid the NULL problem, a separate
+// Index type has been created which should make
+// indexes more reliable
 pub(crate) mod index {
     #[derive(Debug, Copy, Clone)]
     #[repr(transparent)]
@@ -15,6 +32,12 @@ pub(crate) mod index {
 
     impl Index {
         #[allow(non_upper_case_globals)]
+        // Safe None value because the size of TsilCev will
+        // never be larger than usize::MAX (besides the
+        // array itself we also store additional information
+        // (length, capacity, start, end, size::<T>, next,
+        // prev) so the size of the array inside will always
+        // be smaller for usize::MAX)
         pub(crate) const None: Index = Index(usize::MAX);
         #[inline]
         pub(crate) fn is_none(self) -> bool {
@@ -51,7 +74,7 @@ pub struct TsilCev<T> {
 }
 
 impl<T> TsilCev<T> {
-    // Must be > 1 because cev must have 1 element
+    // Minimum length at which there is a reduction in length
     const MIN_REALOC_LEN: usize = 8;
 
     pub fn with_capacity(cap: usize) -> Self {
@@ -262,6 +285,11 @@ impl<T> TsilCev<T> {
     }
 
     #[inline]
+    pub fn reserve(&mut self, additional: usize) {
+        self.cev.reserve(additional);
+    }
+
+    #[inline]
     pub fn capacity(&self) -> usize {
         self.cev.capacity()
     }
@@ -283,19 +311,6 @@ impl<T> TsilCev<T> {
 
     pub fn push_back(&mut self, val: T) {
         unsafe { self.insert(self.end, Index::None, val) };
-        /*let idx = self.cev.len();
-        self.cev.push(Val {
-            el: val,
-            next: Index::None,
-            prev: self.end,
-        });
-        if !self.end().is_none() {
-            unsafe { self.cev.get_unchecked_mut(self.end.0).next = Index(idx) };
-        }
-        self.end = Index(idx);
-        if self.start().is_none() {
-            self.start = Index(idx);
-        };*/
     }
 
     pub fn pop_back(&mut self) -> Option<T> {
@@ -306,19 +321,6 @@ impl<T> TsilCev<T> {
 
     pub fn push_front(&mut self, val: T) {
         unsafe { self.insert(Index::None, self.start, val) };
-        /*let idx = self.cev.len();
-        self.cev.push(Val {
-            el: val,
-            next: self.start,
-            prev: Index::None,
-        });
-        if !self.start().is_none() {
-            unsafe { self.cev.get_unchecked_mut(self.start.0).prev = Index(idx) };
-        }
-        self.start = Index(idx);
-        if self.end().is_none() {
-            self.end = Index(idx);
-        }*/
     }
 
     pub fn pop_front(&mut self) -> Option<T> {
@@ -464,8 +466,8 @@ impl<T> TsilCev<T> {
     }
 }
 
-impl<T: Clone> TsilCev<T> {
-    pub fn from_slice(slice: &[T]) -> Self {
+impl<T: Clone> From<&[T]> for TsilCev<T> {
+    fn from(slice: &[T]) -> Self {
         if slice.len() == 0 {
             Self::new()
         } else if slice.len() == 1 {
@@ -515,6 +517,78 @@ impl<T: Clone> TsilCev<T> {
             }
             tsil_cev
         }
+    }
+}
+
+impl<T> From<Vec<T>> for TsilCev<T> {
+    fn from(vec: Vec<T>) -> Self {
+        if vec.len() == 0 {
+            Self::new()
+        } else if vec.len() == 1 {
+            Self {
+                cev: vec![Val {
+                    el: unsafe { core::ptr::read(vec.as_ptr()) },
+                    next: Index::None,
+                    prev: Index::None,
+                }],
+                start: Index(0),
+                end: Index(0),
+            }
+        } else {
+            let mut cev = Vec::with_capacity(vec.len());
+            // safe because after init
+            unsafe { cev.set_len(vec.len()) };
+            let mut tsil_cev = Self {
+                cev: cev,
+                start: Index(0),
+                end: Index(vec.len() - 1),
+            };
+            unsafe {
+                // safe because vec.len() > 1
+                *tsil_cev.cev.get_unchecked_mut(0) = Val {
+                    el: core::ptr::read(vec.as_ptr()),
+                    next: Index(1),
+                    prev: Index::None,
+                };
+
+                // safe because vec.len() > 1 and tsil_cev.end >= 1
+                *tsil_cev.cev.get_unchecked_mut(tsil_cev.end.0) = Val {
+                    el: core::ptr::read(vec.as_ptr().add(tsil_cev.end.0)),
+                    next: Index::None,
+                    prev: Index(tsil_cev.end.0 - 1),
+                };
+
+                // safe because vec.len() > 1 and tsil_cev.end >= 1
+                tsil_cev.cev.get_unchecked_mut(1..tsil_cev.end.0).iter_mut()
+                    .zip(vec.into_iter().skip(1).zip((1..).into_iter()))
+                    .for_each(|(x, (val, current_idx))|
+                        *x = Val {
+                            el: val,
+                            next: Index(current_idx + 1),
+                            prev: Index(current_idx - 1),
+                        }
+                    );
+            }
+            tsil_cev
+        }
+    }
+}
+
+impl<T: Clone> From<&Vec<T>> for TsilCev<T> {
+    fn from(vec: &Vec<T>) -> Self {
+        Self::from(vec.as_slice())
+    }
+}
+
+impl<T> From<TsilCev<T>> for Vec<T> {
+    fn from(tsil_cev: TsilCev<T>) -> Self {
+        tsil_cev.to_vec()
+    }
+}
+
+impl<T: Clone> From<&TsilCev<T>> for Vec<T> {
+    fn from(tsil_cev: &TsilCev<T>) -> Self {
+        tsil_cev.iter_tsil().map(|x| x.clone()).collect()
     }
 }
 
