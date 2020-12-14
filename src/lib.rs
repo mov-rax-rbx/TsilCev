@@ -1,15 +1,15 @@
-//! Implementation of the linked list on Vec. Has an
-//! amortized insertion and removal time per constant
-//! due to linear placement in memory. It is added in
-//! the same way as in Vec, but at deletion the element
+//! Implementation of the linked list on `Vec`. Has an
+//! O(1) amortized insertion and removal time due to
+//! linear placement in memory. It is added in the
+//! same way as in `Vec`, but at deletion the element
 //! moves to the end and something like pop is called,
-//! and if the length equals capacity / 4 then the vector
+//! and if the length equals capacity / 4 then the `Vec`
 //! is reallocated and the capacity == 2 * length
 //! invariant is always executed.
 
-//! TsilCev has 2 types of iterators Tsil and Cev.
-//! Tlist - iterating as in LinkedList. Cev - iterating
-//! as in Vec (a bit faster because memory access is sequential).
+//! TsilCev has 2 types of iterators `Tsil` and `Cev`.
+//! `Tsil` - iterating as in `LinkedList`. `Cev` - iterating
+//! as in `Vec` (a bit faster because memory access is sequential).
 
 #![no_std]
 
@@ -28,23 +28,24 @@ use crate::index::Index;
 pub(crate) mod index {
     #[derive(Debug, Copy, Clone)]
     #[repr(transparent)]
+    // Like NonZeroUsize but NonMaxUsize
     pub(crate) struct Index(pub(crate) usize);
 
     impl Index {
         #[allow(non_upper_case_globals)]
-        // Safe None value because the size of TsilCev will
-        // never be larger than usize::MAX (besides the
-        // array itself we also store additional information
-        // (length, capacity, start, end, size::<T>, next,
-        // prev) so the size of the array inside will always
-        // be smaller for usize::MAX)
+        // Safe None value because the size of array inside the
+        // TsilCev will never be larger than usize::MAX (index is
+        // relative address besides the array itself we also store
+        // additional information (`length`, `capacity`, `start`,
+        // `end`, `size::<T>`, `next`, `prev`) so the size of the
+        // array inside will always be smaller for usize::MAX)
         pub(crate) const None: Index = Index(usize::MAX);
         #[inline]
-        pub(crate) fn is_none(self) -> bool {
+        pub(crate) const fn is_none(self) -> bool {
             self.0 == Index::None.0
         }
         #[inline]
-        pub(crate) fn to_option(self) -> Option<usize> {
+        pub(crate) const fn to_option(self) -> Option<usize> {
             match self.0 {
                 usize::MAX => None,
                 idx => Some(idx),
@@ -77,6 +78,15 @@ impl<T> TsilCev<T> {
     // Minimum length at which there is a reduction in length
     const MIN_REALOC_LEN: usize = 8;
 
+    /// Constructs a new, empty `TsilCev` with the specified capacity like in `Vec`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let tc = TsilCev::<()>::with_capacity(4);
+    /// assert_eq!(tc.len(), 0);
+    /// assert_eq!(tc.capacity(), 4);
+    /// ```
+    #[inline]
     pub fn with_capacity(cap: usize) -> Self {
         Self {
             cev: Vec::with_capacity(cap),
@@ -85,7 +95,20 @@ impl<T> TsilCev<T> {
         }
     }
 
-    pub fn new() -> Self {
+    /// Constructs a new, empty `TsilCev`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// assert_eq!(tc.len(), 0);
+    /// assert_eq!(tc.capacity(), 0);
+    ///
+    /// tc.push_back(5);
+    /// assert_eq!(tc.len(), 1);
+    /// assert!(tc.capacity() >= 1);
+    /// ```
+    #[inline]
+    pub const fn new() -> Self {
         Self {
             cev: Vec::new(),
             start: Index::None,
@@ -93,6 +116,18 @@ impl<T> TsilCev<T> {
         }
     }
 
+    /// Deletes all values from `TsilCev` like in `Vec`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3]);
+    /// assert_eq!(tc.len(), 4);
+    /// assert!(tc.capacity() >= 4);
+    ///
+    /// tc.clear();
+    /// assert_eq!(tc.len(), 0);
+    /// ```
+    #[inline]
     pub fn clear(&mut self) {
         self.cev.clear();
         self.start = Index::None;
@@ -110,22 +145,59 @@ impl<T> TsilCev<T> {
         self.end
     }
 
+    /// Returns `Tsil` iterator. Iterating as in `LinkedList`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_back(10);
+    /// tc.push_front(0);
+    /// let mut cev_iter = tc.iter_tsil();
+    ///
+    /// assert_eq!(cev_iter.next(), Some(&0));
+    /// assert_eq!(cev_iter.next(), Some(&10));
+    /// assert_eq!(cev_iter.next(), None);
+    /// ```
     #[inline]
     pub fn iter_tsil(&self) -> TsilIter<T> {
         TsilIter {
-            tsil_cev: self,
-            cursor: self.start().to_option(),
-        }
-    }
-    #[inline]
-    pub fn iter_tsil_mut(&mut self) -> TsilIterMut<T> {
-        let start = self.start().to_option();
-        TsilIterMut {
-            tsil_cev: self,
-            cursor: start,
+            cursor: self.cursor_front(),
         }
     }
 
+    /// Returns `Tsil` iterator. Iterating as in `LinkedList` that allows modifying each value.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_back(10);
+    /// tc.push_front(0);
+    /// for x in tc.iter_tsil_mut() {
+    ///     *x *= 20;
+    /// }
+    ///
+    /// assert_eq!(tc.to_vec(), &[0, 200]);
+    /// ```
+    #[inline]
+    pub fn iter_tsil_mut(&mut self) -> TsilIterMut<T> {
+        TsilIterMut {
+            cursor: self.cursor_front_mut(),
+        }
+    }
+
+    /// Returns `Cev` iterator. Iterating as in `Vec`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_back(10);
+    /// tc.push_front(0);
+    /// let mut cev_iter = tc.iter_cev();
+    ///
+    /// assert_eq!(cev_iter.next(), Some(&10));
+    /// assert_eq!(cev_iter.next(), Some(&0));
+    /// assert_eq!(cev_iter.next(), None);
+    /// ```
     #[inline]
     pub fn iter_cev(&self) -> CevIter<T> {
         CevIter {
@@ -133,6 +205,20 @@ impl<T> TsilCev<T> {
             pos: 0,
         }
     }
+
+    /// Returns `Cev` iterator. Iterating as in Vec that allows modifying each value.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_back(10);
+    /// tc.push_front(0);
+    /// for x in tc.iter_cev_mut() {
+    ///     *x *= 20;
+    /// }
+    ///
+    /// assert_eq!(tc.to_vec(), &[0, 200]);
+    /// ```
     #[inline]
     pub fn iter_cev_mut(&mut self) -> CevIterMut<T> {
         CevIterMut {
@@ -141,6 +227,31 @@ impl<T> TsilCev<T> {
         }
     }
 
+    /// Creates an `Tsil` iterator which uses a mutate closure to determine if an element should be removed like in `LinkedList`.
+    ///
+    /// If the closure returns true, then the element is removed and yielded.
+    /// If the closure returns false, the element will remain in the vector and will not be yielded
+    /// by the iterator.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_front(4);
+    /// tc.push_front(3);
+    /// tc.push_front(2);
+    /// tc.push_front(1);
+    /// tc.push_front(0);
+    /// tc.push_back(5);
+    /// tc.push_back(6);
+    /// tc.push_back(7);
+    /// tc.push_back(8);
+    /// tc.push_back(9);
+    ///
+    /// let less_eq_four = tc.drain_filter_tsil(|x| *x <= 4).collect::<Vec<_>>();
+    ///
+    /// assert_eq!(less_eq_four, &[0, 1, 2, 3, 4]); // note the order of the sequence (Tsil iterator)
+    /// assert_eq!(tc.to_vec(), &[5, 6, 7, 8, 9]);
+    /// ```
     #[inline]
     pub fn drain_filter_tsil<F>(&mut self, pred: F) -> DrainFilterTsil<T, F>
     where
@@ -154,6 +265,32 @@ impl<T> TsilCev<T> {
         }
     }
 
+    /// More efficient then drain_filter_tsil because use `Cev` iterator. But the iteration order is not the same as in `LinkedList`.
+    /// Creates an `Cev` iterator which uses a mutate closure to determine if an element should be removed like in `Vec`.
+    ///
+    /// If the closure returns true, then the element is removed and yielded.
+    /// If the closure returns false, the element will remain in the vector and will not be yielded
+    /// by the iterator.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_front(4);
+    /// tc.push_front(3);
+    /// tc.push_front(2);
+    /// tc.push_front(1);
+    /// tc.push_front(0);
+    /// tc.push_back(5);
+    /// tc.push_back(6);
+    /// tc.push_back(7);
+    /// tc.push_back(8);
+    /// tc.push_back(9);
+    ///
+    /// let less_eq_four = tc.drain_filter_cev(|x| *x <= 4).collect::<Vec<_>>();
+    ///
+    /// assert_eq!(less_eq_four, &[4, 3, 2, 1, 0]); // note the order of the sequence (Cev iterator)
+    /// assert_eq!(tc.to_vec(), &[5, 6, 7, 8, 9]);
+    /// ```
     #[inline]
     pub fn drain_filter_cev<F>(&mut self, pred: F) -> DrainFilterCev<T, F>
     where
@@ -168,22 +305,67 @@ impl<T> TsilCev<T> {
         }
     }
 
+    /// Returns reference to the front (start) element or `None` if `TsilCev` is empty like in `LinkedList`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// assert_eq!(tc.front(), Some(&0));
+    /// assert_eq!(TsilCev::<()>::new().front(), None);
+    /// ```
     #[inline]
     pub fn front(&self) -> Option<&T> {
         // safe because check back not empty
         Some(unsafe { &self.cev.get_unchecked(self.start().to_option()?).el })
     }
+
+    /// Returns reference to the back (end) element or `None` if `TsilCev` is empty like in `LinkedList`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// assert_eq!(tc.back(), Some(&4));
+    /// assert_eq!(TsilCev::<()>::new().back(), None);
+    /// ```
     #[inline]
     pub fn back(&self) -> Option<&T> {
         // safe because check back not empty
         Some(unsafe { &self.cev.get_unchecked(self.end().to_option()?).el })
     }
+
+    /// Returns mutable reference to the front (start) element or `None` if `TsilCev` is empty like in `LinkedList`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// match tc.front_mut() {
+    ///     Some(x) => *x = 10,
+    ///     None => {},
+    /// }
+    ///
+    /// assert_eq!(tc.front(), Some(&10));
+    /// assert_eq!(TsilCev::<()>::new().front(), None);
+    /// ```
     #[inline]
     pub fn front_mut(&mut self) -> Option<&mut T> {
         let start = self.start().to_option()?;
         // safe because check back not empty
         Some(unsafe { &mut self.cev.get_unchecked_mut(start).el })
     }
+
+    /// Returns mutable reference to the back (end) element or `None` if `TsilCev` is empty like in `LinkedList`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// match tc.back_mut() {
+    ///     Some(x) => *x = 14,
+    ///     None => {},
+    /// }
+    ///
+    /// assert_eq!(tc.back(), Some(&14));
+    /// assert_eq!(TsilCev::<()>::new().back(), None);
+    /// ```
     #[inline]
     pub fn back_mut(&mut self) -> Option<&mut T> {
         let end = self.end().to_option()?;
@@ -191,6 +373,15 @@ impl<T> TsilCev<T> {
         Some(unsafe { &mut self.cev.get_unchecked_mut(end).el })
     }
 
+    /// Returns cursor to the front (start) element.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let cursor = tc.cursor_front();
+    ///
+    /// assert_eq!(cursor.inner(), tc.front());
+    /// ```
     #[inline]
     pub fn cursor_front(&self) -> Cursor<'_, T> {
         // safe because always have first element
@@ -200,6 +391,16 @@ impl<T> TsilCev<T> {
             idx: self.start(),
         }
     }
+
+    /// Returns cursor to the end (back) element.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let cursor = tc.cursor_back();
+    ///
+    /// assert_eq!(cursor.inner(), tc.back());
+    /// ```
     #[inline]
     pub fn cursor_back(&self) -> Cursor<'_, T> {
         // safe because always have first element
@@ -209,6 +410,20 @@ impl<T> TsilCev<T> {
             idx: self.end(),
         }
     }
+
+    /// Returns mutable cursor to the front (start) element.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let mut cursor = tc.cursor_front_mut();
+    /// if let Some(x) = cursor.inner_mut() {
+    ///     *x = 14;
+    /// }
+    ///
+    /// assert_eq!(cursor.inner(), Some(&14));
+    /// assert_eq!(tc.to_vec(), &[14, 1, 2, 3, 4]);
+    /// ```
     #[inline]
     pub fn cursor_front_mut(&mut self) -> CursorMut<'_, T> {
         // safe because check back not empty
@@ -219,6 +434,20 @@ impl<T> TsilCev<T> {
             idx: start
         }
     }
+
+    /// Returns mutable cursor to the back (end) element.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let mut cursor = tc.cursor_back_mut();
+    /// if let Some(x) = cursor.inner_mut() {
+    ///     *x = 14;
+    /// }
+    ///
+    /// assert_eq!(cursor.inner(), Some(&14));
+    /// assert_eq!(tc.to_vec(), &[0, 1, 2, 3, 14]);
+    /// ```
     #[inline]
     pub fn cursor_back_mut(&mut self) -> CursorMut<'_, T> {
         // safe because check back not empty
@@ -230,6 +459,21 @@ impl<T> TsilCev<T> {
         }
     }
 
+    /// Returns cursor to the element with `LinkedList` order.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_front(3);
+    /// tc.push_front(2);
+    /// tc.push_front(1);
+    /// tc.push_back(4);
+    ///
+    /// assert_eq!(tc.cursor_idx_tsil(0).inner(), Some(&1));
+    /// assert_eq!(tc.cursor_idx_tsil(1).inner(), Some(&2));
+    /// assert_eq!(tc.cursor_idx_tsil(2).inner(), Some(&3));
+    /// assert_eq!(tc.cursor_idx_tsil(3).inner(), Some(&4));
+    /// ```
     pub fn cursor_idx_tsil(&self, idx: usize) -> Cursor<'_, T> {
         if idx >= self.len() {
             Cursor {
@@ -248,6 +492,26 @@ impl<T> TsilCev<T> {
             cursor
         }
     }
+
+    /// Returns mutable cursor to the element with `LinkedList` order.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_front(3);
+    /// tc.push_front(2);
+    /// tc.push_front(1);
+    /// tc.push_back(4);
+    ///
+    /// *tc.cursor_idx_tsil_mut(0).inner_mut().unwrap() = 0;
+    /// *tc.cursor_idx_tsil_mut(1).inner_mut().unwrap() = 0;
+    /// *tc.cursor_idx_tsil_mut(2).inner_mut().unwrap() = 0;
+    /// *tc.cursor_idx_tsil_mut(3).inner_mut().unwrap() = 1;
+    /// assert_eq!(tc.cursor_idx_tsil_mut(0).inner(), Some(&0));
+    /// assert_eq!(tc.cursor_idx_tsil_mut(1).inner(), Some(&0));
+    /// assert_eq!(tc.cursor_idx_tsil_mut(2).inner(), Some(&0));
+    /// assert_eq!(tc.cursor_idx_tsil_mut(3).inner(), Some(&1));
+    /// ```
     pub fn cursor_idx_tsil_mut(&mut self, idx: usize) -> CursorMut<'_, T> {
         if idx >= self.len() {
             CursorMut {
@@ -267,11 +531,22 @@ impl<T> TsilCev<T> {
         }
     }
 
+    /// Transform `TsilCev` to `Vec` with `LinkedList` order.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_front(3);
+    /// tc.push_front(2);
+    /// tc.push_front(1);
+    /// tc.push_back(4);
+    ///
+    /// assert_eq!(tc.to_vec(), vec![1, 2, 3, 4]);
+    /// ```
     pub fn to_vec(self) -> Vec<T> {
         // like
         // self.into_iter().map(move |x| x).collect::<Vec<_>>()
 
-        // Faster then previous?
         let mut ret = Vec::with_capacity(self.cev.len());
         let mut cursor = self.start().to_option();
         while let Some(x) = cursor {
@@ -287,6 +562,10 @@ impl<T> TsilCev<T> {
     #[inline]
     pub fn reserve(&mut self, additional: usize) {
         self.cev.reserve(additional);
+    }
+    #[inline]
+    pub fn shrink_to_fit(&mut self) {
+        self.cev.shrink_to_fit();
     }
 
     #[inline]
@@ -310,7 +589,7 @@ impl<T> TsilCev<T> {
     }
 
     pub fn push_back(&mut self, val: T) {
-        unsafe { self.insert(self.end, Index::None, val) };
+        unsafe { self.insert(self.end(), Index::None, val) };
     }
 
     pub fn pop_back(&mut self) -> Option<T> {
@@ -320,7 +599,7 @@ impl<T> TsilCev<T> {
     }
 
     pub fn push_front(&mut self, val: T) {
-        unsafe { self.insert(Index::None, self.start, val) };
+        unsafe { self.insert(Index::None, self.start(), val) };
     }
 
     pub fn pop_front(&mut self) -> Option<T> {
@@ -592,6 +871,7 @@ impl<T: Clone> From<&TsilCev<T>> for Vec<T> {
     }
 }
 
+#[derive(Clone)]
 pub struct Cursor<'t, T: 't> {
     tsil_cev: &'t TsilCev<T>,
     idx: Index,
@@ -677,10 +957,9 @@ impl<'t, T: 't> Cursor<'t, T> {
     }
 
     #[inline]
-    pub fn iter_tsil(&self) -> TsilIter<T> {
+    pub fn iter_tsil(self) -> TsilIter<'t, T> {
         TsilIter {
-            tsil_cev: self.tsil_cev,
-            cursor: self.idx.to_option(),
+            cursor: self,
         }
     }
     #[inline]
@@ -794,17 +1073,15 @@ impl<'t, T: 't> CursorMut<'t, T> {
     }
 
     #[inline]
-    pub fn iter_tsil(&self) -> TsilIter<T> {
+    pub fn iter_tsil(self) -> TsilIter<'t, T> {
         TsilIter {
-            tsil_cev: self.tsil_cev,
-            cursor: self.idx.to_option(),
+            cursor: self.to_cursor(),
         }
     }
     #[inline]
-    pub fn iter_tsil_mut(&mut self) -> TsilIterMut<T> {
+    pub fn iter_tsil_mut(self) -> TsilIterMut<'t, T> {
         TsilIterMut {
-            tsil_cev: self.tsil_cev,
-            cursor: self.idx.to_option(),
+            cursor: self,
         }
     }
 
@@ -864,14 +1141,12 @@ impl<'t, T: 't> CursorMut<'t, T> {
 }
 
 pub struct TsilIterMut<'t, T: 't> {
-    tsil_cev: &'t mut TsilCev<T>,
-    cursor: Option<usize>,
+    cursor: CursorMut<'t, T>,
 }
 
 #[derive(Clone)]
 pub struct TsilIter<'t, T: 't> {
-    tsil_cev: &'t TsilCev<T>,
-    cursor: Option<usize>,
+    cursor: Cursor<'t, T>,
 }
 
 #[derive(Clone)]
@@ -884,21 +1159,20 @@ impl<'t, T: 't> Iterator for TsilIter<'t, T> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let x = self.cursor?;
-        // safe because cursor traversal in tsil_cev
-        self.cursor = unsafe { self.tsil_cev.cev.get_unchecked(x).next }.to_option();
-        // safe 0 <= x < self.tsil_cev.cev.len because we traversal on tsil_cev
-        Some(unsafe { &self.tsil_cev.cev.get_unchecked(x).el })
+        // safe because Rust can't deduce that we won't return multiple references to the same value
+        let x = Some(unsafe { &*(self.cursor.inner()? as *const _) });
+        self.cursor.move_next();
+        x
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.tsil_cev.len(), Some(self.tsil_cev.len()))
+        (self.cursor.tsil_cev.len(), Some(self.cursor.tsil_cev.len()))
     }
 
     #[inline]
     fn last(self) -> Option<&'t T> {
-        self.tsil_cev.back()
+        self.cursor.tsil_cev.back()
     }
 }
 
@@ -907,22 +1181,20 @@ impl<'t, T: 't> Iterator for TsilIterMut<'t, T> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let x = self.cursor?;
-        // safe because cursor traversal in tsil_cev
-        self.cursor = unsafe { self.tsil_cev.cev.get_unchecked(x).next }.to_option();
         // safe because Rust can't deduce that we won't return multiple references to the same value
-        // and 0 <= x < self.tsil_cev.cev.len because we traversal on tsil_cev
-        Some(unsafe { &mut *(&mut self.tsil_cev.cev.get_unchecked_mut(x).el as *mut _) })
+        let x = Some(unsafe { &mut *(self.cursor.inner_mut()? as *mut _) });
+        self.cursor.move_next();
+        x
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.tsil_cev.len(), Some(self.tsil_cev.len()))
+        (self.cursor.tsil_cev.len(), Some(self.cursor.tsil_cev.len()))
     }
 
     #[inline]
     fn last(self) -> Option<&'t mut T> {
-        self.tsil_cev.back_mut()
+        self.cursor.tsil_cev.back_mut()
     }
 }
 
@@ -943,24 +1215,20 @@ impl<T> Iterator for TsilIntoIter<T> {
 impl<'t, T: 't> DoubleEndedIterator for TsilIter<'t, T> {
     #[inline]
     fn next_back(&mut self) -> Option<&'t T> {
-        let x = self.cursor?;
-        // safe because cursor traversal in tsil_cev
-        self.cursor = unsafe { self.tsil_cev.cev.get_unchecked(x).prev }.to_option();
         // safe because Rust can't deduce that we won't return multiple references to the same value
-        // and 0 <= x < self.tsil_cev.cev.len because we traversal on tsil_cev
-        Some(unsafe { &self.tsil_cev.cev.get_unchecked(x).el })
+        let x = Some(unsafe { &*(self.cursor.inner()? as *const _) });
+        self.cursor.move_prev();
+        x
     }
 }
 
 impl<'t, T: 't> DoubleEndedIterator for TsilIterMut<'t, T> {
     #[inline]
     fn next_back(&mut self) -> Option<&'t mut T> {
-        let x = self.cursor?;
-        // safe because cursor traversal in tsil_cev
-        self.cursor = unsafe { self.tsil_cev.cev.get_unchecked(x).prev }.to_option();
         // safe because Rust can't deduce that we won't return multiple references to the same value
-        // and 0 <= x < self.tsil_cev.cev.len because we traversal on tsil_cev
-        Some(unsafe { &mut *(&mut self.tsil_cev.cev.get_unchecked_mut(x).el as *mut _) })
+        let x = Some(unsafe { &mut *(self.cursor.inner_mut()? as *mut _) });
+        self.cursor.move_prev();
+        x
     }
 }
 
@@ -1177,21 +1445,6 @@ impl<T: Ord> Ord for TsilCev<T> {
         self.iter_tsil().cmp(other)
     }
 }
-
-// impl<T: Clone> Clone for TsilCev<T> {
-//     fn clone(&self) -> Self {
-//         Self {
-//             cev: self.cev.clone(),
-//             start: self.start,
-//             end: self.end,
-//         }
-//     }
-//     fn clone_from(&mut self, source: &Self) {
-//         self.cev.clone_from(&source.cev);
-//         self.start = source.start;
-//         self.end = source.end;
-//     }
-// }
 
 impl<T: Hash> Hash for TsilCev<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
