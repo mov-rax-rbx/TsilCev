@@ -305,10 +305,9 @@ fn iter(c: &mut Criterion) {
     group.finish();
 }
 
-fn iter_tsil(c: &mut Criterion) {
-    let tc = TsilCev::from(NUMS);
-    c.bench_function("TsilCev::new().iter_tsil_mut()", |b| b.iter(|| {
-        tc.clone().iter_tsil_mut().for_each(|x| x.add_one());
+fn to_vec(c: &mut Criterion) {
+    c.bench_function("TsilCev::new().to_vec()", |b| b.iter(|| {
+        let _ = TsilCev::from(NUMS);
     }));
 }
 
@@ -318,7 +317,7 @@ criterion_group!(benches,
     // remove,
     // realoc_trigger_tsil_cev,
     // remove_if_tsil_cev,
-    iter_tsil
+    to_vec
     // iter,
 );
 criterion_main!(benches);

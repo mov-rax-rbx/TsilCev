@@ -547,16 +547,10 @@ impl<T> TsilCev<T> {
         // like
         // self.into_iter().map(move |x| x).collect::<Vec<_>>()
 
-        let mut ret = Vec::with_capacity(self.cev.len());
-        let mut cursor = self.start().to_option();
-        while let Some(x) = cursor {
-            // safe because cursor traversal in tsil_cev
-            cursor = unsafe { self.cev.get_unchecked(x).next }.to_option();
-            // safe because self move and drop in end
-            let val = unsafe { core::ptr::read(self.cev.as_ptr().add(x)).el };
-            ret.push(val);
-        }
-        ret
+        self.iter_tsil()
+            // safe because self move and droped
+            .map(|x| unsafe { core::ptr::read(x as *const _) })
+            .collect::<Vec<_>>()
     }
 
     #[inline]
@@ -915,6 +909,17 @@ impl<'t, T: 't> Cursor<'t, T> {
     }
 
     #[inline]
+    pub unsafe fn move_next_unchecked(&mut self) -> &mut Self {
+        self.idx = self.tsil_cev.cev.get_unchecked(self.idx.0).next;
+        self
+    }
+    #[inline]
+    pub unsafe fn move_prev_unchecked(&mut self) -> &mut Self {
+        self.idx = self.tsil_cev.cev.get_unchecked(self.idx.0).prev;
+        self
+    }
+
+    #[inline]
     pub fn move_next_length(&mut self, mut len: usize) -> &mut Self {
         while !self.idx.is_none() && len > 0 {
             // safe because by previous check and self.idx traversal on tsil_cev
@@ -1018,6 +1023,17 @@ impl<'t, T: 't> CursorMut<'t, T> {
             // safe because by previous check and self.idx traversal on tsil_cev
             self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).prev }
         }
+        self
+    }
+
+    #[inline]
+    pub unsafe fn move_next_unchecked(&mut self) -> &mut Self {
+        self.idx = self.tsil_cev.cev.get_unchecked(self.idx.0).next;
+        self
+    }
+    #[inline]
+    pub unsafe fn move_prev_unchecked(&mut self) -> &mut Self {
+        self.idx = self.tsil_cev.cev.get_unchecked(self.idx.0).prev;
         self
     }
 
@@ -1161,7 +1177,8 @@ impl<'t, T: 't> Iterator for TsilIter<'t, T> {
     fn next(&mut self) -> Option<Self::Item> {
         // safe because Rust can't deduce that we won't return multiple references to the same value
         let x = Some(unsafe { &*(self.cursor.inner()? as *const _) });
-        self.cursor.move_next();
+        // safe by previous check
+        unsafe { self.cursor.move_next_unchecked() };
         x
     }
 
@@ -1183,7 +1200,8 @@ impl<'t, T: 't> Iterator for TsilIterMut<'t, T> {
     fn next(&mut self) -> Option<Self::Item> {
         // safe because Rust can't deduce that we won't return multiple references to the same value
         let x = Some(unsafe { &mut *(self.cursor.inner_mut()? as *mut _) });
-        self.cursor.move_next();
+        // safe by previous check
+        unsafe { self.cursor.move_next_unchecked() };
         x
     }
 
@@ -1217,7 +1235,8 @@ impl<'t, T: 't> DoubleEndedIterator for TsilIter<'t, T> {
     fn next_back(&mut self) -> Option<&'t T> {
         // safe because Rust can't deduce that we won't return multiple references to the same value
         let x = Some(unsafe { &*(self.cursor.inner()? as *const _) });
-        self.cursor.move_prev();
+        // safe by previous check
+        unsafe { self.cursor.move_prev_unchecked() };
         x
     }
 }
@@ -1227,7 +1246,8 @@ impl<'t, T: 't> DoubleEndedIterator for TsilIterMut<'t, T> {
     fn next_back(&mut self) -> Option<&'t mut T> {
         // safe because Rust can't deduce that we won't return multiple references to the same value
         let x = Some(unsafe { &mut *(self.cursor.inner_mut()? as *mut _) });
-        self.cursor.move_prev();
+        // safe by previous check
+        unsafe { self.cursor.move_prev_unchecked() };
         x
     }
 }
@@ -1333,7 +1353,8 @@ where
             if (self.pred)(x) {
                 return self.cursor.owned();
             }
-            self.cursor.move_next();
+            // safe by previous check
+            unsafe { self.cursor.move_next_unchecked() };
         }
         None
     }
