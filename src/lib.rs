@@ -19,6 +19,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use core::hash::{Hash, Hasher};
 use core::cmp::Ordering;
+use core::iter::{FromIterator, FusedIterator};
 use crate::index::Index;
 
 // It should be Option<usize>, but in order to save
@@ -569,17 +570,6 @@ impl<T> TsilCev<T> {
     #[inline]
     pub fn len(&self) -> usize {
         self.cev.len()
-    }
-
-    pub fn remove_if(&mut self, pred: impl Fn(&T) -> bool) {
-        let mut cursor = self.cursor_front_mut();
-        while let Some(x) = cursor.inner() {
-            if pred(x) {
-                cursor.remove();
-            } else {
-                cursor.move_next();
-            }
-        }
     }
 
     pub fn push_back(&mut self, val: T) {
@@ -1265,11 +1255,11 @@ impl<'t, T: 't> ExactSizeIterator for CevIter<'t, T> {}
 impl<'t, T: 't> ExactSizeIterator for CevIterMut<'t, T> {}
 impl<T> ExactSizeIterator for TsilIntoIter<T> {}
 
-impl<'t, T: 't> core::iter::FusedIterator for TsilIter<'t, T> {}
-impl<'t, T: 't> core::iter::FusedIterator for TsilIterMut<'t, T> {}
-impl<'t, T: 't> core::iter::FusedIterator for CevIter<'t, T> {}
-impl<'t, T: 't> core::iter::FusedIterator for CevIterMut<'t, T> {}
-impl<T> core::iter::FusedIterator for TsilIntoIter<T> {}
+impl<'t, T: 't> FusedIterator for TsilIter<'t, T> {}
+impl<'t, T: 't> FusedIterator for TsilIterMut<'t, T> {}
+impl<'t, T: 't> FusedIterator for CevIter<'t, T> {}
+impl<'t, T: 't> FusedIterator for CevIterMut<'t, T> {}
+impl<T> FusedIterator for TsilIntoIter<T> {}
 
 pub struct CevIterMut<'t, T: 't> {
     tsil_cev: &'t mut TsilCev<T>,
@@ -1427,9 +1417,53 @@ impl<'t, T> IntoIterator for &'t mut TsilCev<T> {
 }
 
 impl<T> Extend<T> for TsilCev<T> {
-    #[inline]
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
-        iter.into_iter().for_each(move |x| self.push_back(x));
+        // like
+        // iter.into_iter().for_each(move |x| self.push_back(x));
+
+        let mut into_iter = iter.into_iter();
+        if self.cev.len() == 0 {
+            if let Some(x) = into_iter.next() {
+                self.cev.reserve(into_iter.size_hint().0.saturating_add(1));
+                // safe because allocate size >= 1
+                unsafe {
+                    *self.cev.get_unchecked_mut(0) = Val {
+                        el: x,
+                        next: Index(1),
+                        prev: Index::None,
+                    };
+                    self.cev.set_len(1);
+                };
+                self.start = Index(0);
+                self.end = Index(0);
+            } else {
+                return;
+            }
+        }
+        let old_len = self.cev.len();
+        self.cev.extend(
+            into_iter
+            .zip((old_len..).into_iter())
+            .map(move |(x, current_idx)|
+                Val {
+                    el: x,
+                    next: Index(current_idx + 1),
+                    prev: Index(current_idx - 1),
+                }
+        ));
+        let new_len = self.cev.len();
+        if new_len != old_len {
+            // not overflow because new_len >= 1
+            let last = new_len - 1;
+            // safe because 0 <= last and old_len < self.cev.len
+            unsafe {
+                self.cev.get_unchecked_mut(last).next = Index::None;
+                self.cev.get_unchecked_mut(old_len).prev = self.end;
+            }
+            self.end = Index(last);
+        } else {
+            unsafe { self.cev.get_unchecked_mut(0).next = Index::None };
+        }
     }
 }
 
@@ -1437,6 +1471,15 @@ impl<'t, T: 't + Copy> Extend<&'t T> for TsilCev<T> {
     #[inline]
     fn extend<I: IntoIterator<Item = &'t T>>(&mut self, iter: I) {
         self.extend(iter.into_iter().cloned());
+    }
+}
+
+impl<T> FromIterator<T> for TsilCev<T> {
+    #[inline]
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let mut tsil_cev = Self::new();
+        tsil_cev.extend(iter.into_iter());
+        tsil_cev
     }
 }
 

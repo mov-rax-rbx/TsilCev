@@ -305,9 +305,29 @@ fn iter(c: &mut Criterion) {
     group.finish();
 }
 
-fn to_vec(c: &mut Criterion) {
-    c.bench_function("TsilCev::new().to_vec()", |b| b.iter(|| {
-        let _ = TsilCev::from(NUMS);
+fn empty_tsil_cev_extend(c: &mut Criterion) {
+    c.bench_function("NUMS.iter().map(|x| x.clone()).collect::<TsilCev<_>>()", |b| b.iter(|| {
+        let _ = NUMS.iter().map(|x| x.clone()).collect::<TsilCev<_>>();
+    }));
+}
+
+fn non_empty_tsil_cev_extend(c: &mut Criterion) {
+    let mut tc = TsilCev::from(NUMS.iter().cloned().take(10).map(|x| x).collect::<Vec<_>>());
+    c.bench_function("TsilCev::from(..).extend(NUMS.clone())", |b| b.iter(|| {
+        tc.clone().extend(NUMS.into_iter().cloned());
+    }));
+}
+
+fn empty_vec_extend(c: &mut Criterion) {
+    c.bench_function("NUMS.iter().map(|x| x.clone()).collect::<Vec<_>>()", |b| b.iter(|| {
+        let _ = NUMS.iter().map(|x| x.clone()).collect::<Vec<_>>();
+    }));
+}
+
+fn non_empty_vec_extend(c: &mut Criterion) {
+    let mut vec = Vec::from(NUMS.iter().cloned().take(10).map(|x| x).collect::<Vec<_>>());
+    c.bench_function("Vec::from(..).extend(NUMS.clone())", |b| b.iter(|| {
+        vec.clone().extend(NUMS.into_iter().cloned());
     }));
 }
 
@@ -317,7 +337,10 @@ criterion_group!(benches,
     // remove,
     // realoc_trigger_tsil_cev,
     // remove_if_tsil_cev,
-    to_vec
+    empty_tsil_cev_extend,
+    non_empty_tsil_cev_extend,
+    empty_vec_extend,
+    non_empty_vec_extend,
     // iter,
 );
 criterion_main!(benches);
