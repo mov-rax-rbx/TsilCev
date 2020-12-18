@@ -994,7 +994,6 @@ impl<T: Clone> From<&TsilCev<T>> for Vec<T> {
     }
 }
 
-// TODO: add inner_unchecked + move_prev_cycle + move_move_cycle
 #[derive(Clone)]
 pub struct Cursor<'t, T: 't> {
     tsil_cev: &'t TsilCev<T>,
@@ -1018,6 +1017,23 @@ impl<'t, T: 't> Cursor<'t, T> {
 
         // safe because 0 <= Some(self.idx) < cev.len because self.idx traversal on tsil_cev
         Some(unsafe { &self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).el })
+    }
+
+    /// Returns a reference to the element that the cursor is currently
+    /// pointing and not check if cursor empty.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let cursor = tc.cursor_front();
+    ///
+    /// assert_eq!(unsafe { cursor.inner_unchecked() }, &0);
+    /// ```
+    #[inline]
+    pub unsafe fn inner_unchecked(&self) -> &T {
+        debug_assert!(self.idx.to_option().map_or(false, |x| x < self.tsil_cev.cev.len()));
+
+        &self.tsil_cev.cev.get_unchecked(self.idx.0).el
     }
 
     /// Move cursor to front (start) `TsilCev`.
@@ -1108,6 +1124,62 @@ impl<'t, T: 't> Cursor<'t, T> {
         self
     }
 
+    /// Move cursor to next `TsilCev` element in `LinkedList` order.
+    /// If the cursor is empty or back (end) element in `TsilCev`
+    /// then this will move to the front (start) element.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let mut cursor = tc.cursor_back();
+    ///
+    /// assert_eq!(cursor.inner(), Some(&4));
+    /// cursor.move_next_cycle();
+    /// assert_eq!(cursor.inner(), Some(&0));
+    /// cursor.move_next_cycle();
+    /// assert_eq!(cursor.inner(), Some(&1));
+    /// ```
+    #[inline]
+    pub fn move_next_cycle(&mut self) -> &mut Self {
+        if !self.idx.is_none() &&
+            // valid because self.idx not Index::None
+            self.idx.0 != self.tsil_cev.end.0
+        {
+            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).next };
+        } else {
+            self.to_start();
+        }
+        self
+    }
+
+    /// Move cursor to prev `TsilCev` element in `LinkedList` order.
+    /// If the cursor is empty or front (start) element in `TsilCev`
+    /// then this will move to the back (end) element.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let mut cursor = tc.cursor_front();
+    ///
+    /// assert_eq!(cursor.inner(), Some(&0));
+    /// cursor.move_prev_cycle();
+    /// assert_eq!(cursor.inner(), Some(&4));
+    /// cursor.move_prev_cycle();
+    /// assert_eq!(cursor.inner(), Some(&3));
+    /// ```
+    #[inline]
+    pub fn move_prev_cycle(&mut self) -> &mut Self {
+        if !self.idx.is_none() &&
+            // valid because self.idx not Index::None
+            self.idx.0 != self.tsil_cev.start.0
+        {
+            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).prev };
+        } else {
+            self.to_end();
+        }
+        self
+    }
+
     /// Move cursor to next `TsilCev` element in `LinkedList` order
     /// not check if cursor is empty.
     /// ```
@@ -1159,7 +1231,7 @@ impl<'t, T: 't> Cursor<'t, T> {
     }
 
     /// Move cursor to next `TsilCev` elements with lengths in
-    /// `LinkedList` order not check if cursor is empty.
+    /// `LinkedList` order.
     /// ```
     /// use tsil_cev::TsilCev;
     ///
@@ -1188,7 +1260,7 @@ impl<'t, T: 't> Cursor<'t, T> {
     }
 
     /// Move cursor to prev `TsilCev` element with lenght in
-    /// `LinkedList` order not check if cursor is empty.
+    /// `LinkedList` order.
     /// ```
     /// use tsil_cev::TsilCev;
     ///
@@ -1252,6 +1324,54 @@ impl<'t, T: 't> Cursor<'t, T> {
         Some(unsafe { &self.tsil_cev.cev.get_unchecked(prev_idx.to_option()?).el })
     }
 
+    /// Returns a reference to the next element or `None` if `TsilCev` empty.
+    /// If the cursor is empty or back (end) element in `TsilCev`
+    /// then this will return the front (start) element.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    ///
+    /// assert_eq!(tc.cursor_back().peek_next_cycle(), Some(&0));
+    /// assert_eq!(tc.cursor_back().peek_next(), None);
+    /// ```
+    #[inline]
+    pub fn peek_next_cycle(&self) -> Option<&T> {
+        if !self.idx.is_none() &&
+            // valid because self.idx not Index::None
+            self.idx.0 != self.tsil_cev.end.0
+        {
+            let next_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).next };
+            Some(unsafe { &self.tsil_cev.cev.get_unchecked(next_idx.0).el })
+        } else {
+            Some(unsafe { &self.tsil_cev.cev.get_unchecked(self.tsil_cev.start.to_option()?).el })
+        }
+    }
+
+    /// Returns a reference to the prev element or `None` if `TsilCev` empty.
+    /// If the cursor is empty or back (end) element in `TsilCev`
+    /// then this will return the front (start) element.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    ///
+    /// assert_eq!(tc.cursor_front().peek_prev_cycle(), Some(&4));
+    /// assert_eq!(tc.cursor_front().peek_prev(), None);
+    /// ```
+    #[inline]
+    pub fn peek_prev_cycle(&self) -> Option<&T> {
+        if !self.idx.is_none() &&
+            // valid because self.idx not Index::None
+            self.idx.0 != self.tsil_cev.start.0
+        {
+            let prev_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).prev };
+            Some(unsafe { &self.tsil_cev.cev.get_unchecked(prev_idx.0).el })
+        } else {
+            Some(unsafe { &self.tsil_cev.cev.get_unchecked(self.tsil_cev.end.to_option()?).el })
+        }
+    }
+
     /// Finish combination chain with cursor.
     /// ```
     /// use tsil_cev::TsilCev;
@@ -1303,6 +1423,16 @@ pub struct CursorMut<'t, T: 't> {
 }
 
 impl<'t, T: 't> CursorMut<'t, T> {
+    /// Returns a reference to the element that the cursor is currently
+    /// pointing or `None` if cursor empty.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let cursor = tc.cursor_front_mut();
+    ///
+    /// assert_eq!(cursor.inner(), Some(&0));
+    /// ```
     #[inline]
     pub fn inner(&self) -> Option<&T> {
         debug_assert!(self.idx.to_option().map_or(true, |x| x < self.tsil_cev.cev.len()));
@@ -1310,6 +1440,38 @@ impl<'t, T: 't> CursorMut<'t, T> {
         // safe because 0 <= Some(self.idx) < cev.len because self.idx traversal on tsil_cev
         Some(unsafe { &self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).el })
     }
+
+    /// Returns a reference to the element that the cursor is currently
+    /// pointing and not check if cursor empty.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let cursor = tc.cursor_front();
+    ///
+    /// assert_eq!(unsafe { cursor.inner_unchecked() }, &0);
+    /// ```
+    #[inline]
+    pub unsafe fn inner_unchecked(&self) -> &T {
+        debug_assert!(self.idx.to_option().map_or(false, |x| x < self.tsil_cev.cev.len()));
+
+        &self.tsil_cev.cev.get_unchecked(self.idx.0).el
+    }
+
+    /// Returns a mutable reference to the element that the cursor is currently
+    /// pointing or `None` if cursor empty.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let mut cursor = tc.cursor_front_mut();
+    /// match cursor.inner_mut() {
+    ///     Some(x) => *x = 10,
+    ///     None => {},
+    /// };
+    ///
+    /// assert_eq!(cursor.inner(), Some(&10));
+    /// ```
     #[inline]
     pub fn inner_mut(&mut self) -> Option<&mut T> {
         debug_assert!(self.idx.to_option().map_or(true, |x| x < self.tsil_cev.cev.len()));
@@ -1318,17 +1480,76 @@ impl<'t, T: 't> CursorMut<'t, T> {
         Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(self.idx.to_option()?).el })
     }
 
+    /// Returns a mutable reference to the element that the cursor is currently
+    /// pointing and not check if cursor empty.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let mut cursor = tc.cursor_front_mut();
+    /// unsafe { *cursor.inner_unchecked_mut() = 10 };
+    ///
+    /// assert_eq!(cursor.inner(), Some(&10));
+    /// ```
+    #[inline]
+    pub unsafe fn inner_unchecked_mut(&mut self) -> &mut T {
+        debug_assert!(self.idx.to_option().map_or(false, |x| x < self.tsil_cev.cev.len()));
+
+        &mut self.tsil_cev.cev.get_unchecked_mut(self.idx.0).el
+    }
+
+    /// Move cursor to front (start) `TsilCev`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let mut cursor = tc.cursor_idx_tsil_mut(3);
+    ///
+    /// assert_eq!(cursor.inner(), Some(&3));
+    /// cursor.to_start();
+    /// assert_eq!(cursor.inner(), Some(&0));
+    /// ```
     #[inline]
     pub fn to_start(&mut self) -> &mut Self {
         self.idx = self.tsil_cev.start();
         self
     }
+
+    /// Move cursor to back (end) `TsilCev`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let mut cursor = tc.cursor_idx_tsil_mut(3);
+    ///
+    /// assert_eq!(cursor.inner(), Some(&3));
+    /// cursor.to_end();
+    /// assert_eq!(cursor.inner(), Some(&4));
+    /// ```
     #[inline]
     pub fn to_end(&mut self) -> &mut Self {
         self.idx = self.tsil_cev.end();
         self
     }
 
+    /// Move cursor to next `TsilCev` element in `LinkedList` order.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_back(3);
+    /// tc.push_back(4);
+    /// tc.push_front(2);
+    /// tc.push_front(1);
+    /// tc.push_front(0);
+    /// let mut cursor = tc.cursor_front_mut();
+    ///
+    /// assert_eq!(cursor.inner(), Some(&0));
+    /// cursor.move_next();
+    /// assert_eq!(cursor.inner(), Some(&1));
+    /// cursor.move_next();
+    /// assert_eq!(cursor.inner(), Some(&2));
+    /// ```
     #[inline]
     pub fn move_next(&mut self) -> &mut Self {
         if !self.idx.is_none() {
@@ -1337,6 +1558,25 @@ impl<'t, T: 't> CursorMut<'t, T> {
         }
         self
     }
+
+    /// Move cursor to prev `TsilCev` element in `LinkedList` order.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_back(3);
+    /// tc.push_back(4);
+    /// tc.push_front(2);
+    /// tc.push_front(1);
+    /// tc.push_front(0);
+    /// let mut cursor = tc.cursor_back_mut();
+    ///
+    /// assert_eq!(cursor.inner(), Some(&4));
+    /// cursor.move_prev();
+    /// assert_eq!(cursor.inner(), Some(&3));
+    /// cursor.move_prev();
+    /// assert_eq!(cursor.inner(), Some(&2));
+    /// ```
     #[inline]
     pub fn move_prev(&mut self) -> &mut Self {
         if !self.idx.is_none() {
@@ -1346,17 +1586,131 @@ impl<'t, T: 't> CursorMut<'t, T> {
         self
     }
 
+    /// Move cursor to next `TsilCev` element in `LinkedList` order.
+    /// If the cursor is empty or back (end) element in `TsilCev`
+    /// then this will move to the front (start) element.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let mut cursor = tc.cursor_back_mut();
+    ///
+    /// assert_eq!(cursor.inner(), Some(&4));
+    /// cursor.move_next_cycle();
+    /// assert_eq!(cursor.inner(), Some(&0));
+    /// cursor.move_next_cycle();
+    /// assert_eq!(cursor.inner(), Some(&1));
+    /// ```
+    #[inline]
+    pub fn move_next_cycle(&mut self) -> &mut Self {
+        if !self.idx.is_none() &&
+            // valid because self.idx not Index::None
+            self.idx.0 != self.tsil_cev.end.0
+        {
+            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).next };
+        } else {
+            self.to_start();
+        }
+        self
+    }
+
+    /// Move cursor to prev `TsilCev` element in `LinkedList` order.
+    /// If the cursor is empty or front (start) element in `TsilCev`
+    /// then this will move to the back (end) element.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let mut cursor = tc.cursor_front_mut();
+    ///
+    /// assert_eq!(cursor.inner(), Some(&0));
+    /// cursor.move_prev_cycle();
+    /// assert_eq!(cursor.inner(), Some(&4));
+    /// cursor.move_prev_cycle();
+    /// assert_eq!(cursor.inner(), Some(&3));
+    /// ```
+    #[inline]
+    pub fn move_prev_cycle(&mut self) -> &mut Self {
+        if !self.idx.is_none() &&
+            // valid because self.idx not Index::None
+            self.idx.0 != self.tsil_cev.start.0
+        {
+            self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).prev };
+        } else {
+            self.to_end();
+        }
+        self
+    }
+
+    /// Move cursor to next `TsilCev` element in `LinkedList` order
+    /// not check if cursor is empty.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_back(3);
+    /// tc.push_back(4);
+    /// tc.push_front(2);
+    /// tc.push_front(1);
+    /// tc.push_front(0);
+    /// let mut cursor = tc.cursor_front_mut();
+    ///
+    /// assert_eq!(cursor.inner(), Some(&0));
+    /// unsafe { cursor.move_next_unchecked() };
+    /// assert_eq!(cursor.inner(), Some(&1));
+    /// unsafe { cursor.move_next_unchecked() };
+    /// assert_eq!(cursor.inner(), Some(&2));
+    /// ```
     #[inline]
     pub unsafe fn move_next_unchecked(&mut self) -> &mut Self {
         self.idx = self.tsil_cev.cev.get_unchecked(self.idx.0).next;
         self
     }
+
+    /// Move cursor to prev `TsilCev` element in `LinkedList` order
+    /// not check if cursor is empty.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_back(3);
+    /// tc.push_back(4);
+    /// tc.push_front(2);
+    /// tc.push_front(1);
+    /// tc.push_front(0);
+    /// let mut cursor = tc.cursor_back_mut();
+    ///
+    /// assert_eq!(cursor.inner(), Some(&4));
+    /// unsafe { cursor.move_prev_unchecked() };
+    /// assert_eq!(cursor.inner(), Some(&3));
+    /// unsafe { cursor.move_prev_unchecked() };
+    /// assert_eq!(cursor.inner(), Some(&2));
+    /// ```
     #[inline]
     pub unsafe fn move_prev_unchecked(&mut self) -> &mut Self {
         self.idx = self.tsil_cev.cev.get_unchecked(self.idx.0).prev;
         self
     }
 
+    /// Move cursor to next `TsilCev` elements with lengths in
+    /// `LinkedList` order.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_back(3);
+    /// tc.push_back(4);
+    /// tc.push_front(2);
+    /// tc.push_front(1);
+    /// tc.push_front(0);
+    /// let mut cursor = tc.cursor_front_mut();
+    ///
+    /// assert_eq!(cursor.inner(), Some(&0));
+    /// cursor.move_next_length(1);
+    /// assert_eq!(cursor.inner(), Some(&1));
+    /// cursor.move_next_length(3);
+    /// assert_eq!(cursor.inner(), Some(&4));
+    /// ```
     #[inline]
     pub fn move_next_length(&mut self, mut len: usize) -> &mut Self {
         while !self.idx.is_none() && len > 0 {
@@ -1366,6 +1720,26 @@ impl<'t, T: 't> CursorMut<'t, T> {
         }
         self
     }
+
+    /// Move cursor to prev `TsilCev` element with lenght in
+    /// `LinkedList` order.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_back(3);
+    /// tc.push_back(4);
+    /// tc.push_front(2);
+    /// tc.push_front(1);
+    /// tc.push_front(0);
+    /// let mut cursor = tc.cursor_back_mut();
+    ///
+    /// assert_eq!(cursor.inner(), Some(&4));
+    /// cursor.move_prev_length(1);
+    /// assert_eq!(cursor.inner(), Some(&3));
+    /// cursor.move_prev_length(3);
+    /// assert_eq!(cursor.inner(), Some(&0));
+    /// ```
     #[inline]
     pub fn move_prev_length(&mut self, mut len: usize) -> &mut Self {
         while !self.idx.is_none() && len > 0 {
@@ -1376,6 +1750,17 @@ impl<'t, T: 't> CursorMut<'t, T> {
         self
     }
 
+    /// Returns a mutable reference to the next element or `None` if cursor empty
+    /// or next element not exist.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// *tc.cursor_front_mut().peek_next().unwrap() = 10;
+    ///
+    /// assert_eq!(tc.cursor_front_mut().peek_next(), Some(&mut 10));
+    /// assert_eq!(tc.cursor_back_mut().peek_next(), None);
+    /// ```
     #[inline]
     pub fn peek_next(&mut self) -> Option<&mut T> {
         // safe because self.idx.to_option()? and self.idx traversal on tsil_cev
@@ -1383,6 +1768,18 @@ impl<'t, T: 't> CursorMut<'t, T> {
         // safe because next_idx.to_option()? and self.idx traversal on tsil_cev
         Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(next_idx.to_option()?).el })
     }
+
+    /// Returns a mutable reference to the prev element or `None` if cursor empty
+    /// or prev element not exist.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// *tc.cursor_back_mut().peek_prev().unwrap() = 30;
+    ///
+    /// assert_eq!(tc.cursor_front_mut().peek_prev(), None);
+    /// assert_eq!(tc.cursor_back_mut().peek_prev(), Some(&mut 30));
+    /// ```
     #[inline]
     pub fn peek_prev(&mut self) -> Option<&mut T> {
         // safe because self.idx.to_option()? and self.idx traversal on tsil_cev
@@ -1391,6 +1788,65 @@ impl<'t, T: 't> CursorMut<'t, T> {
         Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(prev_idx.to_option()?).el })
     }
 
+    /// Returns a mutable reference to the next element or `None` if `TsilCev` empty.
+    /// If the cursor is empty or back (end) element in `TsilCev`
+    /// then this will return the front (start) element.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    ///
+    /// assert_eq!(tc.cursor_back_mut().peek_next_cycle(), Some(&mut 0));
+    /// assert_eq!(tc.cursor_back_mut().peek_next(), None);
+    /// ```
+    #[inline]
+    pub fn peek_next_cycle(&mut self) -> Option<&mut T> {
+        if !self.idx.is_none() &&
+            // valid because self.idx not Index::None
+            self.idx.0 != self.tsil_cev.end.0
+        {
+            let next_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).next };
+            Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(next_idx.0).el })
+        } else {
+            Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(self.tsil_cev.start.to_option()?).el })
+        }
+    }
+
+    /// Returns a mutable reference to the prev element or `None` if `TsilCev` empty.
+    /// If the cursor is empty or back (end) element in `TsilCev`
+    /// then this will return the front (start) element.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    ///
+    /// assert_eq!(tc.cursor_front_mut().peek_prev_cycle(), Some(&mut 4));
+    /// assert_eq!(tc.cursor_front_mut().peek_prev(), None);
+    /// ```
+    #[inline]
+    pub fn peek_prev_cycle(&mut self) -> Option<&mut T> {
+        if !self.idx.is_none() &&
+            // valid because self.idx not Index::None
+            self.idx.0 != self.tsil_cev.start.0
+        {
+            let prev_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).prev };
+            Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(prev_idx.0).el })
+        } else {
+            Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(self.tsil_cev.end.to_option()?).el })
+        }
+    }
+
+    /// Finish combination chain with cursor.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    ///
+    /// let mut cursor = tc.cursor_front_mut().move_next_length(3).finish();
+    /// assert_eq!(cursor.inner(), Some(&3));
+    /// cursor.move_next();
+    /// assert_eq!(cursor.inner(), Some(&4));
+    /// ```
     #[inline]
     pub fn finish(&mut self) -> Self {
         Self {
@@ -1400,6 +1856,18 @@ impl<'t, T: 't> CursorMut<'t, T> {
         }
     }
 
+    /// Convert CursorMut to Cursor.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let cursor_mut = tc.cursor_front_mut().move_next_length(3).finish();
+    /// let mut cursor = cursor_mut.to_cursor();
+    ///
+    /// assert_eq!(cursor.inner(), Some(&3));
+    /// cursor.move_next();
+    /// assert_eq!(cursor.inner(), Some(&4));
+    /// ```
     #[inline]
     pub const fn to_cursor(self) -> Cursor<'t, T> {
         Cursor {
@@ -1408,12 +1876,49 @@ impl<'t, T: 't> CursorMut<'t, T> {
         }
     }
 
+    /// Returns `Tsil` iterator from current cursor position.
+    /// Iterating as in `LinkedList`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_back(3);
+    /// tc.push_back(4);
+    /// tc.push_front(2);
+    /// tc.push_front(1);
+    /// tc.push_front(0);
+    ///
+    /// let mut cursor = tc.cursor_front_mut().move_next().finish();
+    /// assert_eq!(
+    ///     cursor.iter_tsil().map(|x| x.clone()).collect::<Vec<_>>(),
+    ///     &[1, 2, 3, 4]
+    /// ); // note the order of the sequence (Tsil iterator)
+    /// ```
     #[inline]
     pub const fn iter_tsil(self) -> TsilIter<'t, T> {
         TsilIter {
             cursor: self.to_cursor(),
         }
     }
+
+    /// Returns mutable `Tsil` iterator from current cursor position.
+    /// Iterating as in `LinkedList`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_back(3);
+    /// tc.push_back(4);
+    /// tc.push_front(2);
+    /// tc.push_front(1);
+    /// tc.push_front(0);
+    ///
+    /// let mut cursor = tc.cursor_front_mut().move_next().finish();
+    /// assert_eq!(
+    ///     cursor.iter_tsil_mut().map(|x| x.clone() + 1).collect::<Vec<_>>(),
+    ///     &[2, 3, 4, 5]
+    /// ); // note the order of the sequence (Tsil iterator)
+    /// ```
     #[inline]
     pub const fn iter_tsil_mut(self) -> TsilIterMut<'t, T> {
         TsilIterMut {
@@ -1421,6 +1926,26 @@ impl<'t, T: 't> CursorMut<'t, T> {
         }
     }
 
+    /// Insert elements before current cursor position in `LinkedList` order.
+    /// Current cursor position don't move. If the cursor is empty then the
+    /// new element is inserted at the back (end) of the `TsilCev`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    ///
+    /// let cursor = tc.cursor_front_mut().insert_before(-1).finish();
+    /// assert_eq!(cursor.inner(), Some(&0));
+    /// assert_eq!(tc.clone().to_vec(), &[-1, 0, 1, 2, 3, 4]);
+    ///
+    /// let cursor = tc.cursor_front_mut().move_next_length(3).insert_before(20).finish();
+    /// assert_eq!(cursor.inner(), Some(&2));
+    /// assert_eq!(tc.clone().to_vec(), &[-1, 0, 1, 20, 2, 3, 4]);
+    ///
+    /// let cursor = tc.cursor_front_mut().move_prev().insert_before(100).finish();
+    /// assert_eq!(cursor.inner(), None);
+    /// assert_eq!(tc.clone().to_vec(), &[-1, 0, 1, 20, 2, 3, 4, 100]);
+    /// ```
     pub fn insert_before(&mut self, val: T) -> &mut Self {
         if !self.idx.is_none() {
             let prev = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).prev };
@@ -1430,6 +1955,27 @@ impl<'t, T: 't> CursorMut<'t, T> {
         }
         self
     }
+
+    /// Insert elements after current cursor position in `LinkedList` order.
+    /// Current cursor position don't move. If the cursor is empty then the
+    /// new element is inserted at the front (start) of the `TsilCev`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    ///
+    /// let cursor = tc.cursor_front_mut().insert_after(10).finish();
+    /// assert_eq!(cursor.inner(), Some(&0));
+    /// assert_eq!(tc.clone().to_vec(), &[0, 10, 1, 2, 3, 4]);
+    ///
+    /// let cursor = tc.cursor_front_mut().move_next_length(3).insert_after(20).finish();
+    /// assert_eq!(cursor.inner(), Some(&2));
+    /// assert_eq!(tc.clone().to_vec(), &[0, 10, 1, 2, 20, 3, 4]);
+    ///
+    /// let cursor = tc.cursor_back_mut().move_next().insert_after(-1).finish();
+    /// assert_eq!(cursor.inner(), None);
+    /// assert_eq!(tc.clone().to_vec(), &[-1, 0, 10, 1, 2, 20, 3, 4]);
+    /// ```
     pub fn insert_after(&mut self, val: T) -> &mut Self {
         if !self.idx.is_none() {
             let next = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).next };
@@ -1440,6 +1986,29 @@ impl<'t, T: 't> CursorMut<'t, T> {
         self
     }
 
+    /// Removes and return the current element from the `TsilCev` and move current
+    /// cursor to the next position in `LinkedList` order. If the cursor is empty 
+    /// then no remove and `None` is returned.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    ///
+    /// let mut cursor = tc.cursor_front_mut();
+    /// assert_eq!(cursor.owned(), Some(0));
+    /// assert_eq!(cursor.inner(), Some(&1));
+    /// assert_eq!(tc.clone().to_vec(), &[1, 2, 3, 4]);
+    ///
+    /// let mut cursor = tc.cursor_front_mut().move_next_length(2).finish();
+    /// assert_eq!(cursor.owned(), Some(3));
+    /// assert_eq!(cursor.inner(), Some(&4));
+    /// assert_eq!(tc.clone().to_vec(), &[1, 2, 4]);
+    ///
+    /// let mut cursor = tc.cursor_back_mut();
+    /// assert_eq!(cursor.owned(), Some(4));
+    /// assert_eq!(cursor.inner(), None);
+    /// assert_eq!(tc.clone().to_vec(), &[1, 2]);
+    /// ```
     pub fn owned(&mut self) -> Option<T> {
         if !self.idx.is_none() {
             // safe because after we do self.make_empty() and
@@ -1452,6 +2021,24 @@ impl<'t, T: 't> CursorMut<'t, T> {
         }
     }
 
+    /// Like `owned`, but don't return value.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    ///
+    /// let cursor = tc.cursor_front_mut().remove().finish();
+    /// assert_eq!(cursor.inner(), Some(&1));
+    /// assert_eq!(tc.clone().to_vec(), &[1, 2, 3, 4]);
+    ///
+    /// let cursor = tc.cursor_front_mut().move_next_length(2).remove().finish();
+    /// assert_eq!(cursor.inner(), Some(&4));
+    /// assert_eq!(tc.clone().to_vec(), &[1, 2, 4]);
+    ///
+    /// let cursor = tc.cursor_back_mut().remove().finish();
+    /// assert_eq!(cursor.inner(), None);
+    /// assert_eq!(tc.clone().to_vec(), &[1, 2]);
+    /// ```
     #[inline]
     pub fn remove(&mut self) -> &mut Self {
         let _ = self.owned();
