@@ -131,7 +131,7 @@ fn pop_front(c: &mut Criterion) {
     let mut group = c.benchmark_group("pop_front");
 
     for &i in SAMPLE.iter() {
-        let mut tc = TsilCev::from(NUMS);
+        let tc = TsilCev::from(NUMS);
         group.bench_function(BenchmarkId::new("TsilCev", i), |b| b.iter(|| {
             let mut tc = tc.clone();
             for _ in 0..i {
@@ -200,7 +200,7 @@ fn remove(c: &mut Criterion) {
     let mut group = c.benchmark_group("remove()");
 
     for &i in SAMPLE.iter() {
-        let mut tc = TsilCev::from(NUMS);
+        let tc = TsilCev::from(NUMS);
         let sp = i / 2;
         let rem_size = i / 4;
         group.bench_function(BenchmarkId::new("TsilCev", i), |b| b.iter(|| {
@@ -248,31 +248,6 @@ fn remove(c: &mut Criterion) {
             cursor.remove();
         }
     }));
-}
-
-fn remove_if_tsil_cev(c: &mut Criterion) {
-    let mut tc = TsilCev::new();
-    for x in NUMS.iter() {
-        tc.push_back(x.clone());
-    }
-    let rem_size = NUMS.len() / 4;
-    let etalon = Test::new(9);
-    c.bench_function("TsilCev.iter_cev_mut().remove_if()", |b| b.iter(|| {
-        let mut tc = tc.clone();
-        let mut cursor = tc.cursor_front_mut();
-        let mut cnt = 0;
-        while let Some(x) = cursor.inner() {
-            cnt += 1;
-            if *x == etalon {
-                cursor.remove();
-            } else {
-                cursor.move_next();
-            }
-            if cnt == rem_size {
-                break;
-            }
-        }
-    }));
 }*/
 
 fn iter(c: &mut Criterion) {
@@ -305,29 +280,9 @@ fn iter(c: &mut Criterion) {
     group.finish();
 }
 
-fn empty_tsil_cev_extend(c: &mut Criterion) {
-    c.bench_function("NUMS.iter().map(|x| x.clone()).collect::<TsilCev<_>>()", |b| b.iter(|| {
-        let _ = NUMS.iter().map(|x| x.clone()).collect::<TsilCev<_>>();
-    }));
-}
-
-fn non_empty_tsil_cev_extend(c: &mut Criterion) {
-    let mut tc = TsilCev::from(NUMS.iter().cloned().take(10).map(|x| x).collect::<Vec<_>>());
-    c.bench_function("TsilCev::from(..).extend(NUMS.clone())", |b| b.iter(|| {
-        tc.clone().extend(NUMS.into_iter().cloned());
-    }));
-}
-
-fn empty_vec_extend(c: &mut Criterion) {
-    c.bench_function("NUMS.iter().map(|x| x.clone()).collect::<Vec<_>>()", |b| b.iter(|| {
-        let _ = NUMS.iter().map(|x| x.clone()).collect::<Vec<_>>();
-    }));
-}
-
-fn non_empty_vec_extend(c: &mut Criterion) {
-    let mut vec = Vec::from(NUMS.iter().cloned().take(10).map(|x| x).collect::<Vec<_>>());
-    c.bench_function("Vec::from(..).extend(NUMS.clone())", |b| b.iter(|| {
-        vec.clone().extend(NUMS.into_iter().cloned());
+fn from(c: &mut Criterion) {
+    c.bench_function("TsilCev::from(NUMS.clone())", |b| b.iter(|| {
+        let _ = TsilCev::from(NUMS.clone());
     }));
 }
 
@@ -336,11 +291,7 @@ criterion_group!(benches,
     // bench,
     // remove,
     // realoc_trigger_tsil_cev,
-    // remove_if_tsil_cev,
-    empty_tsil_cev_extend,
-    non_empty_tsil_cev_extend,
-    empty_vec_extend,
-    non_empty_vec_extend,
+    from,
     // iter,
 );
 criterion_main!(benches);

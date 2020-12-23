@@ -569,6 +569,93 @@ impl<T> TsilCev<T> {
             .collect::<Vec<_>>()
     }
 
+    /// Sorts the slice with a comparator function like in `Vec`.
+    /// This sort is stable (i.e., does not reorder equal elements) and `O(n * log(n))` worst-case.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![5, 4, 1, 3, 2]);
+    /// tc.sort_by(|a, b| a.cmp(b));
+    /// assert_eq!(tc.clone().to_vec(), &[1, 2, 3, 4, 5]);
+    ///
+    /// // reverse sorting
+    /// tc.sort_by(|a, b| b.cmp(a));
+    /// assert_eq!(tc.clone().to_vec(), &[5, 4, 3, 2, 1]);
+    /// ```
+    pub fn sort_by(&mut self, mut cmp: impl FnMut(&T, &T) -> Ordering) {
+        self.cev.sort_by(|x, y| cmp(&x.el, &y.el));
+        self.make_chain_cev();
+    }
+
+    /// Sorts the slice with a key extraction function like in `Vec`.
+    /// This sort is stable (i.e., does not reorder equal elements) and `O(m * n * log(n))`
+    /// worst-case, where the key function is `O(m)`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![-5i32, 4, 1, -3, 2]);
+    ///
+    /// tc.sort_by_key(|k| k.abs());
+    /// assert_eq!(tc.clone().to_vec(), &[1, 2, -3, 4, -5]);
+    /// ```
+    pub fn sort_by_key<K: Ord>(&mut self, mut f: impl FnMut(&T) -> K) {
+        self.cev.sort_by_key(|x| f(&x.el));
+        self.make_chain_cev();
+    }
+
+    /// Sorts the slice with a key extraction function like in `Vec`.
+    /// During sorting, the key function is called only once per element.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![-5i32, 4, 32, -3, 2]);
+    ///
+    /// tc.sort_by_cached_key(|k| k.to_string());
+    /// assert_eq!(tc.clone().to_vec(), &[-3, -5, 2, 32, 4]);
+    /// ```
+    pub fn sort_by_cached_key<K: Ord>(&mut self, mut f: impl FnMut(&T) -> K) {
+        self.cev.sort_by_cached_key(|x| f(&x.el));
+        self.make_chain_cev();
+    }
+
+    /// Sorts the slice with a comparator function, but may not preserve the order of equal
+    /// elements like in `Vec`.
+    /// This sort is unstable (i.e., may reorder equal elements), in-place
+    /// (i.e., does not allocate), and *O*(*n* \* log(*n*)) worst-case.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![5, 4, 1, 3, 2]);
+    /// tc.sort_unstable_by(|a, b| a.cmp(b));
+    /// assert_eq!(tc.clone().to_vec(), &[1, 2, 3, 4, 5]);
+    ///
+    /// // reverse sorting
+    /// tc.sort_unstable_by(|a, b| b.cmp(a));
+    /// assert_eq!(tc.clone().to_vec(), &[5, 4, 3, 2, 1]);
+    /// ```
+    pub fn sort_unstable_by(&mut self, mut cmp: impl FnMut(&T, &T) -> Ordering) {
+        self.cev.sort_unstable_by(|x, y| cmp(&x.el, &y.el));
+        self.make_chain_cev();
+    }
+
+    /// Sorts the slice with a key extraction function, but may not preserve the order of equal
+    /// elements like in `Vec`.
+    /// This sort is unstable (i.e., may reorder equal elements), in-place
+    /// (i.e., does not allocate), and *O*(m \* *n* \* log(*n*)) worst-case, where the key function is
+    /// *O*(*m*).
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![-5i32, 4, 1, -3, 2]);
+    ///
+    /// tc.sort_unstable_by_key(|k| k.abs());
+    /// assert_eq!(tc.clone().to_vec(), &[1, 2, -3, 4, -5]);
+    /// ```
+    pub fn sort_unstable_by_key<K: Ord>(&mut self, mut f: impl FnMut(&T) -> K) {
+        self.cev.sort_unstable_by_key(|x| f(&x.el));
+        self.make_chain_cev();
+    }
+
     /// Reserves capacity for at least `additional` more elements to be
     /// inserted like in `Vec`.
     /// ```
@@ -588,6 +675,25 @@ impl<T> TsilCev<T> {
         self.cev.reserve(additional);
     }
 
+    /// Reserves the minimum capacity for exactly `additional` more elements to
+    /// be inserted in the given `TsilCev` like in `Vec`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    ///
+    /// assert_eq!(tc.len(), 5);
+    /// assert!(tc.capacity() >= 5);
+    ///
+    /// tc.reserve_exact(10);
+    /// assert_eq!(tc.len(), 5);
+    /// assert!(tc.capacity() >= 15);
+    /// ```
+    #[inline]
+    pub fn reserve_exact(&mut self, additional: usize) {
+        self.cev.reserve_exact(additional);
+    }
+
     /// Shrinks the capacity of the `TsilCev` as much as possible like in `Vec`.
     /// ```
     /// use tsil_cev::TsilCev;
@@ -605,7 +711,7 @@ impl<T> TsilCev<T> {
     }
 
     /// Returns the number of elements the `TsilCev` can hold without
-    /// reallocating like `Vec`.
+    /// reallocating like in `Vec`.
     /// ```
     /// use tsil_cev::TsilCev;
     ///
@@ -618,7 +724,7 @@ impl<T> TsilCev<T> {
         self.cev.capacity()
     }
 
-    /// Returns the number of elements in the `TsilCev` like `Vec`.
+    /// Returns the number of elements in the `TsilCev` like in `Vec`.
     /// ```
     /// use tsil_cev::TsilCev;
     ///
@@ -631,7 +737,7 @@ impl<T> TsilCev<T> {
     }
 
     /// Appends an element to the back (end) of a `TsilCev`
-    /// like `Vec`.
+    /// like in `Vec`.
     /// ```
     /// use tsil_cev::TsilCev;
     ///
@@ -645,7 +751,7 @@ impl<T> TsilCev<T> {
     }
 
     /// Removes the last element from a `TsilCev` and returns it, or `None` if it
-    /// is empty like `Vec`.
+    /// is empty like in `Vec`.
     /// ```
     /// use tsil_cev::TsilCev;
     ///
@@ -661,7 +767,7 @@ impl<T> TsilCev<T> {
     }
 
     /// Appends an element to the front (start) of a `TsilCev`
-    /// like `Vec`.
+    /// like in `Vec`.
     /// ```
     /// use tsil_cev::TsilCev;
     ///
@@ -675,7 +781,7 @@ impl<T> TsilCev<T> {
     }
 
     /// Removes the first element from a `TsilCev` and returns it, or `None` if it
-    /// is empty like `Vec`.
+    /// is empty like in `Vec`.
     /// ```
     /// use tsil_cev::TsilCev;
     ///
@@ -824,6 +930,37 @@ impl<T> TsilCev<T> {
         let last_val = self.cev.as_ptr().add(last);
         self.cev.set_len(last);
         core::ptr::read(last_val)
+    }
+
+    #[inline]
+    fn make_chain_cev(&mut self) {
+        if self.len() == 1 {
+            self.start = Index(0);
+            self.end = Index(0);
+            // safe because self.len == 1
+            unsafe {
+                self.cev.get_unchecked_mut(0).prev = Index::None;
+                self.cev.get_unchecked_mut(0).next = Index::None;
+            };
+        } else if self.len() > 1 {
+            self.start = Index(0);
+            self.end = Index(self.len() - 1);
+            // safe because self.len > 1
+            unsafe {
+                self.cev.get_unchecked_mut(0).next = Index(1);
+                self.cev.get_unchecked_mut(0).prev = Index::None;
+
+                self.cev.get_unchecked_mut(self.end.0).next = Index::None;
+                self.cev.get_unchecked_mut(self.end.0).prev = Index(self.end.0 - 1);
+
+                self.cev.get_unchecked_mut(1..self.end.0).iter_mut()
+                    .zip((1..).into_iter())
+                    .for_each(|(x, current_idx)| {
+                        x.next = Index(current_idx + 1);
+                        x.prev = Index(current_idx - 1);
+                });
+            };
+        }
     }
 }
 
