@@ -2360,6 +2360,19 @@ impl<'t, T> IntoIterator for &'t mut TsilCev<T> {
 }
 
 impl<T> Extend<T> for TsilCev<T> {
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// tc.extend((5..=10).into_iter());
+    ///
+    /// assert_eq!(tc.to_vec(), &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.extend((0..=4).into_iter());
+    ///
+    /// assert_eq!(tc.to_vec(), TsilCev::from(vec![0, 1, 2, 3, 4]).to_vec());
+    /// ```
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         // like
         // iter.into_iter().for_each(move |x| self.push_back(x));
@@ -2402,6 +2415,8 @@ impl<T> Extend<T> for TsilCev<T> {
             unsafe {
                 self.cev.get_unchecked_mut(last).next = Index::None;
                 self.cev.get_unchecked_mut(old_len).prev = self.end;
+                // valid because old_lem >= 1
+                self.cev.get_unchecked_mut(self.end.0).next = Index(old_len);
             }
             self.end = Index(last);
         } else {
@@ -2418,6 +2433,13 @@ impl<'t, T: 't + Copy> Extend<&'t T> for TsilCev<T> {
 }
 
 impl<T> FromIterator<T> for TsilCev<T> {
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let tc = (0..=4).into_iter().map(|x| x).collect::<TsilCev<_>>();
+    ///
+    /// assert_eq!(tc.to_vec(), &[0, 1, 2, 3, 4]);
+    /// ```
     #[inline]
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut tsil_cev = Self::new();

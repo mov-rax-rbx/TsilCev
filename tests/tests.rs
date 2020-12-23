@@ -629,9 +629,17 @@ fn test_drain_filter_cev() {
 
 #[test]
 fn test_extend() {
+    let mut tc = TsilCev::<()>::new();
+    tc.extend(&[]);
+    assert_eq!(tc.len(), 0);
+
+    let mut tc = TsilCev::from(vec![0]);
+    tc.extend(&[1, 2]);
+    assert_eq!(tc.to_vec(), &[0, 1, 2]);
+
     let etalon = vec![500, 501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510, 508];
-    let mut tc = TsilCev::<usize>::new();
-    tc.extend(&etalon);
+    let mut tc = TsilCev::from(etalon.iter().take(8).map(|x| x.clone()).collect::<Vec<_>>());
+    tc.extend(etalon.iter().skip(8));
     assert_eq!(tc.clone().to_vec(), etalon.clone());
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
