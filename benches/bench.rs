@@ -125,7 +125,8 @@ const NUMS: &'static [Test] = &[
     Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
 ];
 
-const SAMPLE: [usize; 4] = [NUMS.len() / 4, NUMS.len() / 2, 3 * NUMS.len() / 4, NUMS.len()];
+// const SAMPLE: [usize; 4] = [NUMS.len() / 4, NUMS.len() / 2, 3 * NUMS.len() / 4, NUMS.len()];
+const SAMPLE: [usize; 1] = [NUMS.len()];
 
 fn pop_front(c: &mut Criterion) {
     let mut group = c.benchmark_group("pop_front");
@@ -139,16 +140,16 @@ fn pop_front(c: &mut Criterion) {
             }
         }));
 
-        let mut ll = LinkedList::new();
-        for x in NUMS.iter().take(i) {
-            ll.push_back(x.clone());
-        }
-        group.bench_function(BenchmarkId::new("LinkedList", i), |b| b.iter(|| {
-            let mut ll = ll.clone();
-            for _ in 0..i {
-                ll.pop_front();
-            }
-        }));
+        // let mut ll = LinkedList::new();
+        // for x in NUMS.iter().take(i) {
+        //     ll.push_back(x.clone());
+        // }
+        // group.bench_function(BenchmarkId::new("LinkedList", i), |b| b.iter(|| {
+        //     let mut ll = ll.clone();
+        //     for _ in 0..i {
+        //         ll.pop_front();
+        //     }
+        // }));
     }
 
     group.finish();
@@ -175,22 +176,22 @@ fn bench(c: &mut Criterion) {
             }
         }));
 
-        let ll = LinkedList::new();
-        group.bench_function(BenchmarkId::new("LinkedList", i), |b| b.iter(|| {
-            let mut ll = ll.clone();
-            for x in NUMS.iter().take(i / 2) {
-                ll.push_back(x.clone());
-            }
-            for _ in NUMS.iter().take(i / 4) {
-                ll.pop_front();
-            }
-            for x in NUMS.iter().take(i / 2) {
-                ll.push_front(x.clone());
-            }
-            for _ in NUMS.iter().take(i / 2) {
-                ll.pop_back();
-            }
-        }));
+        // let ll = LinkedList::new();
+        // group.bench_function(BenchmarkId::new("LinkedList", i), |b| b.iter(|| {
+        //     let mut ll = ll.clone();
+        //     for x in NUMS.iter().take(i / 2) {
+        //         ll.push_back(x.clone());
+        //     }
+        //     for _ in NUMS.iter().take(i / 4) {
+        //         ll.pop_front();
+        //     }
+        //     for x in NUMS.iter().take(i / 2) {
+        //         ll.push_front(x.clone());
+        //     }
+        //     for _ in NUMS.iter().take(i / 2) {
+        //         ll.pop_back();
+        //     }
+        // }));
     }
 
     group.finish();
@@ -216,26 +217,26 @@ fn remove(c: &mut Criterion) {
             }
         }));
 
-        let mut ll = LinkedList::new();
-        for x in NUMS.iter().take(i) {
-            ll.push_back(x.clone());
-        }
-        let sp = i / 2;
-        let rem_size = i / 4;
-        group.bench_function(BenchmarkId::new("LinkedList", i), |b| b.iter(|| {
-            let mut ll = ll.clone();
-            let mut cursor = ll.cursor_front_mut();
-            for _ in 0..sp { cursor.move_next(); }
-            for _ in 0..rem_size {
-                cursor.remove_current();
-            }
-        }));
+        // let mut ll = LinkedList::new();
+        // for x in NUMS.iter().take(i) {
+        //     ll.push_back(x.clone());
+        // }
+        // let sp = i / 2;
+        // let rem_size = i / 4;
+        // group.bench_function(BenchmarkId::new("LinkedList", i), |b| b.iter(|| {
+        //     let mut ll = ll.clone();
+        //     let mut cursor = ll.cursor_front_mut();
+        //     for _ in 0..sp { cursor.move_next(); }
+        //     for _ in 0..rem_size {
+        //         cursor.remove_current();
+        //     }
+        // }));
     }
 
     group.finish();
 }
 
-/*fn realoc_trigger_tsil_cev(c: &mut Criterion) {
+fn realoc_trigger_tsil_cev(c: &mut Criterion) {
     let mut tc = TsilCev::with_capacity(NUMS.len());
     for x in NUMS.iter() {
         tc.push_back(x.clone());
@@ -248,7 +249,7 @@ fn remove(c: &mut Criterion) {
             cursor.remove();
         }
     }));
-}*/
+}
 
 fn iter(c: &mut Criterion) {
     let mut group = c.benchmark_group("iterator");
@@ -266,15 +267,15 @@ fn iter(c: &mut Criterion) {
             }
         }));
 
-        let mut ll = LinkedList::new();
-        for x in NUMS.iter().take(i) {
-            ll.push_back(x.clone());
-        }
-        group.bench_function(BenchmarkId::new("LinkedList.iter_mut()", i), |b| b.iter(|| {
-            for x in ll.iter_mut() {
-                x.add_one();
-            }
-        }));
+        // let mut ll = LinkedList::new();
+        // for x in NUMS.iter().take(i) {
+        //     ll.push_back(x.clone());
+        // }
+        // group.bench_function(BenchmarkId::new("LinkedList.iter_mut()", i), |b| b.iter(|| {
+        //     for x in ll.iter_mut() {
+        //         x.add_one();
+        //     }
+        // }));
     }
 
     group.finish();
@@ -287,11 +288,11 @@ fn from(c: &mut Criterion) {
 }
 
 criterion_group!(benches,
-    // pop_front,
-    // bench,
-    // remove,
-    // realoc_trigger_tsil_cev,
+    pop_front,
+    bench,
+    remove,
+    realoc_trigger_tsil_cev,
     from,
-    // iter,
+    iter,
 );
 criterion_main!(benches);
