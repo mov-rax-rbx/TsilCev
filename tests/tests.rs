@@ -245,7 +245,7 @@ fn test_insert() {
         .finish();
 
     assert_eq!(Some(&mut 1500), cursor.peek_prev());
-    assert_eq!(Some(&mut 502), cursor.inner_mut());
+    assert_eq!(Some(&mut 502), cursor.current_mut());
     assert_eq!(Some(&mut 503), cursor.peek_next());
 
     let v = tc.iter_tsil().map(|x| x.clone()).collect::<Vec<_>>();
@@ -262,7 +262,7 @@ fn test_insert() {
         .finish();
 
     assert_eq!(Some(&mut 1500), cursor.peek_prev());
-    assert_eq!(Some(&mut 510), cursor.inner_mut());
+    assert_eq!(Some(&mut 510), cursor.current_mut());
     assert_eq!(Some(&mut 0), cursor.peek_next());
 
     let v = tc.iter_tsil().map(|x| x.clone()).collect::<Vec<_>>();
@@ -299,7 +299,7 @@ fn test_remove_balance() {
 
     let mut cursor = tc.cursor_front_mut();
     let mut cnt = 0;
-    while let Some(_) = cursor.inner() {
+    while let Some(_) = cursor.current() {
         cursor.remove();
         cnt += 1;
         if cnt == 50 {
@@ -400,10 +400,10 @@ fn test_cursor_idx() {
 
     let etalon = vec![500, 501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510, 508];
 
-    assert_eq!(*tc.cursor_idx_tsil(3).inner().unwrap(), etalon[3]);
-    assert_eq!(*tc.cursor_idx_tsil(11).inner().unwrap(), etalon[11]);
-    assert_eq!(*tc.cursor_idx_tsil_mut(3).inner().unwrap(), etalon[3]);
-    assert_eq!(*tc.cursor_idx_tsil_mut(11).inner().unwrap(), etalon[11]);
+    assert_eq!(*tc.cursor_idx_tsil(3).current().unwrap(), etalon[3]);
+    assert_eq!(*tc.cursor_idx_tsil(11).current().unwrap(), etalon[11]);
+    assert_eq!(*tc.cursor_idx_tsil_mut(3).current().unwrap(), etalon[3]);
+    assert_eq!(*tc.cursor_idx_tsil_mut(11).current().unwrap(), etalon[11]);
 
     let v = tc.to_vec();
     assert_eq!(v, etalon);
@@ -555,10 +555,10 @@ fn test_drain_filter_tsil() {
     tc.cursor_back_mut().move_prev_length(2).remove().remove();
     assert_eq!(tc.clone().to_vec(), vec![1004]);
 
-    assert_eq!(tc.cursor_back_mut().move_prev_length(2).inner(), None);
-    assert_eq!(tc.cursor_front_mut().move_prev_length(2).inner(), None);
-    assert_eq!(tc.cursor_back().move_prev_length(2).inner(), None);
-    assert_eq!(tc.cursor_front_mut().move_prev_length(2).inner(), None);
+    assert_eq!(tc.cursor_back_mut().move_prev_length(2).current(), None);
+    assert_eq!(tc.cursor_front_mut().move_prev_length(2).current(), None);
+    assert_eq!(tc.cursor_back().move_prev_length(2).current(), None);
+    assert_eq!(tc.cursor_front_mut().move_prev_length(2).current(), None);
     assert_eq!(tc.clone().to_vec(), vec![1004]);
     tc.cursor_front_mut().insert_before(0).insert_after(1);
     assert_eq!(tc.clone().to_vec(), vec![0, 1004, 1]);
@@ -608,10 +608,10 @@ fn test_drain_filter_cev() {
     tc.cursor_back_mut().move_prev_length(2).remove().remove();
     assert_eq!(tc.clone().to_vec(), vec![1004]);
 
-    assert_eq!(tc.cursor_back_mut().move_prev_length(2).inner(), None);
-    assert_eq!(tc.cursor_front_mut().move_prev_length(2).inner(), None);
-    assert_eq!(tc.cursor_back().move_prev_length(2).inner(), None);
-    assert_eq!(tc.cursor_front_mut().move_prev_length(2).inner(), None);
+    assert_eq!(tc.cursor_back_mut().move_prev_length(2).current(), None);
+    assert_eq!(tc.cursor_front_mut().move_prev_length(2).current(), None);
+    assert_eq!(tc.cursor_back().move_prev_length(2).current(), None);
+    assert_eq!(tc.cursor_front_mut().move_prev_length(2).current(), None);
     assert_eq!(tc.clone().to_vec(), vec![1004]);
     tc.cursor_front_mut().insert_before(0).insert_after(1);
     assert_eq!(tc.clone().to_vec(), vec![0, 1004, 1]);
