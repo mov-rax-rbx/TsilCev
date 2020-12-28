@@ -1,13 +1,14 @@
 //! Implementation of the linked list on `Vec`. Has an
-//! O(1) amortized insertion and removal time due to
+//! `O(1)` amortized insertion and removal time due to
 //! linear placement in memory. It is added in the
 //! same way as in `Vec`, but at deletion the element
 //! moves to the end and something like pop is called,
-//! and if the length equals capacity / 4 then the `Vec`
-//! is reallocated and the capacity == 2 * length
+//! and if the length equals `capacity / 4` then the `Vec`
+//! is reallocated and the `capacity == 2 * length`
 //! invariant is always executed.
 
-//! TsilCev has 2 types of iterators `Tsil` and `Cev`.
+//! # `tsil` and `cev`
+//! `TsilCev` has 2 types of iterators `Tsil` and `Cev`.
 //! `Tsil` - iterating as in `LinkedList`. `Cev` - iterating
 //! as in `Vec` (a bit faster because memory access is sequential).
 

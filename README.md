@@ -28,3 +28,10 @@ assert_eq!(cursor.current(), Some(&9));
 let _ = tc.drain_filter_tsil(|x| *x % 2 == 0).collect::<Vec<_>>();
 assert_eq!(tc.to_vec(), &[9]);
 ```
+
+# Comparison with `LinkedList` *(thank [Criterion](https://github.com/bheisler/criterion.rs))*
+
+![](img/iter.svg)
+![](img/pop_front.svg)
+![](img/remove.svg)
+![](img/seq_bench.svg)
