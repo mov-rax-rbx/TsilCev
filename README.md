@@ -1,5 +1,8 @@
 # TsilCev
 
+![Rust](https://github.com/mov-rax-rbx/TsilCev/workflows/Rust/badge.svg)
+[![LICENSE](https://img.shields.io/github/license/mov-rax-rbx/TsilCev)](LICENSE)
+
 `LinkedList` on `Vec`. Add and remove O(1) amortized. It has a similar interface to `LinkedList` and similar to `Vec`.
 
 ## Example
