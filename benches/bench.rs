@@ -125,7 +125,7 @@ const NUMS: &'static [Test] = &[
     Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
 ];
 
-const SAMPLE: [usize; 1] = [NUMS.len()];
+const SAMPLE: [usize; 4] = [NUMS.len() / 4, NUMS.len() / 2, 3 * NUMS.len() / 4, NUMS.len()];
 
 fn pop_front(c: &mut Criterion) {
     let mut group = c.benchmark_group("pop_front");
@@ -207,7 +207,7 @@ fn remove(c: &mut Criterion) {
             let mut tc = tc.clone();
             let mut cursor = tc.cursor_idx_tsil_mut(sp);
             let mut cnt = 0;
-            while let Some(_) = cursor.inner() {
+            while let Some(_) = cursor.current() {
                 cursor.remove();
                 cnt += 1;
                 if cnt == rem_size {
