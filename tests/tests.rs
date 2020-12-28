@@ -572,6 +572,10 @@ fn test_drain_filter_tsil() {
     tc.clear();
     tc.drain_filter_tsil(|x| *x == 0);
     assert_eq!(tc.clone().to_vec(), vec![]);
+
+    let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4, 5]);
+    let _ = tc.drain_filter_tsil(|_| true).collect::<Vec<_>>();
+    assert_eq!(tc.to_vec(), &[]);
 }
 
 #[test]
@@ -625,6 +629,10 @@ fn test_drain_filter_cev() {
     tc.clear();
     tc.drain_filter_cev(|x| *x == 0);
     assert_eq!(tc.clone().to_vec(), vec![]);
+
+    let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4, 5]);
+    let _ = tc.drain_filter_cev(|_| true).collect::<Vec<_>>();
+    assert_eq!(tc.to_vec(), &[]);
 }
 
 #[test]
