@@ -7,7 +7,7 @@ readme = "README.md"
 description = "LinkedList on Vec"
 repository = "https://github.com/mov-rax-rbx/TsilCev"
 keywords = ["allocator", "no_std", "linked_list", "linear_memory"]
-categories = ["data-structures", "algorithms", "no-standard-library"]
+categories = ["data-structures", "algorithms", "no-std"]
 edition = "2018"
 
 [[bench]]
