@@ -40,3 +40,11 @@ assert_eq!(tc.to_vec(), &[9]);
 ![](img/pop_front.svg)
 ![](img/remove.svg)
 ![](img/seq_bench.svg)
+
+# Current Implementation
+
+The allocator for the elements is `Vec` and each
+element has two indexes (next and previous element).
+Also if the number of elements is less than `capacity / 4`
+then it is reallocated to size `capacity / 2`. The time
+of addition and removal is amortized to `O(1)`.
