@@ -766,6 +766,21 @@ impl<T> TsilCev<T> {
         self.cev.len()
     }
 
+    /// Returns `true` if the `TsilCev` contains no elements like in `Vec`.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// assert_eq!(tc.is_empty(), false);
+    ///
+    /// tc.clear();
+    /// assert_eq!(tc.is_empty(), true);
+    /// ```
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.cev.is_empty()
+    }
+
     /// Appends an element to the back (end) of a `TsilCev`
     /// like in `Vec`.
     /// ```
@@ -899,7 +914,7 @@ impl<T> TsilCev<T> {
 
     #[inline]
     unsafe fn make_empty(&mut self, idx: usize) -> (T, Index) {
-        debug_assert!(idx < self.cev.len() && self.len() > 0);
+        debug_assert!(idx < self.cev.len() && !self.is_empty());
 
         let prev = self.cev.get_unchecked(idx).prev;
         let next = self.cev.get_unchecked(idx).next;
@@ -958,7 +973,7 @@ impl<T> TsilCev<T> {
 
     #[inline]
     unsafe fn remove_last_mem(&mut self) -> Val<T> {
-        debug_assert!(self.cev.len() > 0);
+        debug_assert!(!self.cev.is_empty());
 
         let last = self.cev.len() - 1;
         let last_val = self.cev.as_ptr().add(last);
@@ -1169,7 +1184,7 @@ impl<T: Clone> From<&TsilCev<T>> for Vec<T> {
     /// assert_eq!(vec, &[0, 1, 2, 3, 4]);
     /// ```
     fn from(tsil_cev: &TsilCev<T>) -> Self {
-        tsil_cev.iter_tsil().map(|x| x.clone()).collect()
+        tsil_cev.iter_tsil().cloned().collect()
     }
 }
 
@@ -1180,6 +1195,23 @@ pub struct Cursor<'t, T: 't> {
 }
 
 impl<'t, T: 't> Cursor<'t, T> {
+    /// Returns `true` if cursor pointing on some element.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let mut cursor = tc.cursor_front();
+    ///
+    /// assert_eq!(cursor.is_none(), false);
+    ///
+    /// cursor.move_prev();
+    /// assert_eq!(cursor.is_none(), true);
+    /// ```
+    #[inline]
+    pub fn is_none(&self) -> bool {
+        self.idx.is_none()
+    }
+
     /// Returns a reference to the element that the cursor is currently
     /// pointing or `None` if cursor empty.
     /// ```
@@ -1211,6 +1243,9 @@ impl<'t, T: 't> Cursor<'t, T> {
     ///
     /// assert_eq!(unsafe { cursor.current_unchecked() }, &0);
     /// ```
+    /// # Safety
+    ///
+    /// This function safe if current not None.
     #[inline]
     pub unsafe fn current_unchecked(&self) -> &T {
         debug_assert!(self
@@ -1384,6 +1419,9 @@ impl<'t, T: 't> Cursor<'t, T> {
     /// unsafe { cursor.move_next_unchecked() };
     /// assert_eq!(cursor.current(), Some(&2));
     /// ```
+    /// # Safety
+    ///
+    /// This function safe if current not None.
     #[inline]
     pub unsafe fn move_next_unchecked(&mut self) -> &mut Self {
         self.idx = self.tsil_cev.cev.get_unchecked(self.idx.0).next;
@@ -1409,6 +1447,9 @@ impl<'t, T: 't> Cursor<'t, T> {
     /// unsafe { cursor.move_prev_unchecked() };
     /// assert_eq!(cursor.current(), Some(&2));
     /// ```
+    /// # Safety
+    ///
+    /// This function safe if current not None.
     #[inline]
     pub unsafe fn move_prev_unchecked(&mut self) -> &mut Self {
         self.idx = self.tsil_cev.cev.get_unchecked(self.idx.0).prev;
@@ -1618,6 +1659,23 @@ pub struct CursorMut<'t, T: 't> {
 }
 
 impl<'t, T: 't> CursorMut<'t, T> {
+    /// Returns `true` if cursor pointing on some element.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4]);
+    /// let mut cursor = tc.cursor_front_mut();
+    ///
+    /// assert_eq!(cursor.is_none(), false);
+    ///
+    /// cursor.move_prev();
+    /// assert_eq!(cursor.is_none(), true);
+    /// ```
+    #[inline]
+    pub fn is_none(&self) -> bool {
+        self.idx.is_none()
+    }
+
     /// Returns a reference to the element that the cursor is currently
     /// pointing or `None` if cursor empty.
     /// ```
@@ -1649,6 +1707,9 @@ impl<'t, T: 't> CursorMut<'t, T> {
     ///
     /// assert_eq!(unsafe { cursor.current_unchecked() }, &0);
     /// ```
+    /// # Safety
+    ///
+    /// This function safe if current not None.
     #[inline]
     pub unsafe fn current_unchecked(&self) -> &T {
         debug_assert!(self
@@ -1701,6 +1762,9 @@ impl<'t, T: 't> CursorMut<'t, T> {
     ///
     /// assert_eq!(cursor.current(), Some(&10));
     /// ```
+    /// # Safety
+    ///
+    /// This function safe if current not None.
     #[inline]
     pub unsafe fn current_unchecked_mut(&mut self) -> &mut T {
         debug_assert!(self
@@ -1874,6 +1938,9 @@ impl<'t, T: 't> CursorMut<'t, T> {
     /// unsafe { cursor.move_next_unchecked() };
     /// assert_eq!(cursor.current(), Some(&2));
     /// ```
+    /// # Safety
+    ///
+    /// This function safe if current not None.
     #[inline]
     pub unsafe fn move_next_unchecked(&mut self) -> &mut Self {
         self.idx = self.tsil_cev.cev.get_unchecked(self.idx.0).next;
@@ -1899,6 +1966,9 @@ impl<'t, T: 't> CursorMut<'t, T> {
     /// unsafe { cursor.move_prev_unchecked() };
     /// assert_eq!(cursor.current(), Some(&2));
     /// ```
+    /// # Safety
+    ///
+    /// This function safe if current not None.
     #[inline]
     pub unsafe fn move_prev_unchecked(&mut self) -> &mut Self {
         self.idx = self.tsil_cev.cev.get_unchecked(self.idx.0).prev;
