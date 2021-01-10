@@ -12,7 +12,6 @@
 //! `Tsil` - iterating as in `LinkedList`. `Cev` - iterating
 //! as in `Vec` (a bit faster because memory access is sequential).
 
-
 //! # Examples
 //! ```
 //! use tsil_cev::TsilCev;
@@ -51,11 +50,11 @@
 #[macro_use]
 extern crate alloc;
 
-use alloc::vec::Vec;
-use core::hash::{Hash, Hasher};
-use core::cmp::Ordering;
-use core::iter::{FromIterator, FusedIterator};
 use crate::index::Index;
+use alloc::vec::Vec;
+use core::cmp::Ordering;
+use core::hash::{Hash, Hasher};
+use core::iter::{FromIterator, FusedIterator};
 
 // It should be Option<usize>, but in order to save
 // memory and avoid the NULL problem, a separate
@@ -115,7 +114,7 @@ impl<T> TsilCev<T> {
     // Minimum length at which there is a reduction in length
     const MIN_REALOC_LEN: usize = 8;
 
-    /// Constructs a new, empty `TsilCev` with the specified capacity 
+    /// Constructs a new, empty `TsilCev` with the specified capacity
     /// like in `Vec`.
     /// ```
     /// use tsil_cev::TsilCev;
@@ -174,14 +173,12 @@ impl<T> TsilCev<T> {
 
     #[inline]
     fn start(&self) -> Index {
-        debug_assert!(
-            self.start.to_option().map_or(true, |x| x < self.cev.len()));
+        debug_assert!(self.start.to_option().map_or(true, |x| x < self.cev.len()));
         self.start
     }
     #[inline]
     fn end(&self) -> Index {
-        debug_assert!(
-            self.end.to_option().map_or(true, |x| x < self.cev.len()));
+        debug_assert!(self.end.to_option().map_or(true, |x| x < self.cev.len()));
         self.end
     }
 
@@ -482,7 +479,7 @@ impl<T> TsilCev<T> {
         // safe because always have first element
         CursorMut {
             tsil_cev: self,
-            idx: start
+            idx: start,
         }
     }
 
@@ -506,7 +503,7 @@ impl<T> TsilCev<T> {
         // safe because always have first element
         CursorMut {
             tsil_cev: self,
-            idx: end
+            idx: end,
         }
     }
 
@@ -529,10 +526,9 @@ impl<T> TsilCev<T> {
         if idx >= self.len() {
             Cursor {
                 tsil_cev: self,
-                idx: Index::None
+                idx: Index::None,
             }
-        }
-        else if idx <= self.len() >> 1 {
+        } else if idx <= self.len() >> 1 {
             let mut cursor = self.cursor_front();
             cursor.move_next_length(idx);
             cursor
@@ -567,10 +563,9 @@ impl<T> TsilCev<T> {
         if idx >= self.len() {
             CursorMut {
                 tsil_cev: self,
-                idx: Index::None
+                idx: Index::None,
             }
-        }
-        else if idx <= self.len() >> 1 {
+        } else if idx <= self.len() >> 1 {
             let mut cursor = self.cursor_front_mut();
             cursor.move_next_length(idx);
             cursor
@@ -835,7 +830,7 @@ impl<T> TsilCev<T> {
     unsafe fn insert(&mut self, prev: Index, next: Index, val: T) {
         debug_assert!(
             prev.to_option().map_or(true, |x| x < self.cev.len())
-            && next.to_option().map_or(true, |x| x < self.cev.len())
+                && next.to_option().map_or(true, |x| x < self.cev.len())
         );
         let current = self.cev.len();
         self.cev.push(Val {
@@ -850,26 +845,26 @@ impl<T> TsilCev<T> {
     unsafe fn connect(&mut self, prev: Index, next: Index) {
         debug_assert!(
             prev.to_option().map_or(true, |x| x < self.cev.len())
-            && next.to_option().map_or(true, |x| x < self.cev.len())
+                && next.to_option().map_or(true, |x| x < self.cev.len())
         );
         // safe because 0 <= x and y < cev.len
         match (prev.to_option(), next.to_option()) {
             (None, None) => {
                 self.start = Index::None;
                 self.end = Index::None;
-            },
+            }
             (None, Some(y)) => {
                 self.cev.get_unchecked_mut(y).prev = Index::None;
                 self.start = Index(y);
-            },
+            }
             (Some(x), None) => {
                 self.cev.get_unchecked_mut(x).next = Index::None;
                 self.end = Index(x);
-            },
+            }
             (Some(x), Some(y)) => {
                 self.cev.get_unchecked_mut(x).next = Index(y);
                 self.cev.get_unchecked_mut(y).prev = Index(x);
-            },
+            }
         };
     }
 
@@ -877,28 +872,28 @@ impl<T> TsilCev<T> {
     unsafe fn reconnect(&mut self, prev: Index, next: Index, current: Index) {
         debug_assert!(
             prev.to_option().map_or(true, |x| x < self.cev.len())
-            && next.to_option().map_or(true, |x| x < self.cev.len())
-            && current.to_option().map_or(false, |x| x < self.cev.len())
+                && next.to_option().map_or(true, |x| x < self.cev.len())
+                && current.to_option().map_or(false, |x| x < self.cev.len())
         );
         // safe because 0 <= x and y and z < cev.len
         match (prev.to_option(), current.to_option(), next.to_option()) {
             (None, Some(z), None) => {
                 self.start = Index(z);
                 self.end = Index(z);
-            },
+            }
             (None, Some(z), Some(y)) => {
                 self.cev.get_unchecked_mut(y).prev = Index(z);
                 self.start = Index(z);
-            },
+            }
             (Some(x), Some(z), None) => {
                 self.cev.get_unchecked_mut(x).next = Index(z);
                 self.end = Index(z);
-            },
+            }
             (Some(x), Some(z), Some(y)) => {
                 self.cev.get_unchecked_mut(x).next = Index(z);
                 self.cev.get_unchecked_mut(y).prev = Index(z);
-            },
-            _ => unreachable!()
+            }
+            _ => unreachable!(),
         };
     }
 
@@ -919,16 +914,21 @@ impl<T> TsilCev<T> {
 
         // safe because we know that index reorder and save index (save_idx)
         self.try_realoc();
-        (ret, if next.0 == self.cev.len() { Index(idx) } else { next })
+        (
+            ret,
+            if next.0 == self.cev.len() {
+                Index(idx)
+            } else {
+                next
+            },
+        )
     }
 
     #[inline]
     fn try_realoc(&mut self) {
         let realoc_len = self.cev.capacity() >> 1;
         // density balance if density < cev.len() / 4 then realocate for less capacity
-        if realoc_len > Self::MIN_REALOC_LEN
-            && self.cev.len() <= realoc_len >> 1
-        {
+        if realoc_len > Self::MIN_REALOC_LEN && self.cev.len() <= realoc_len >> 1 {
             // safe because cev.len < realoc_len, and 0 < realoc_len < cev.capacity
             unsafe { self.realoc(realoc_len) }
         }
@@ -987,12 +987,14 @@ impl<T> TsilCev<T> {
                 self.cev.get_unchecked_mut(self.end.0).next = Index::None;
                 self.cev.get_unchecked_mut(self.end.0).prev = Index(self.end.0 - 1);
 
-                self.cev.get_unchecked_mut(1..self.end.0).iter_mut()
+                self.cev
+                    .get_unchecked_mut(1..self.end.0)
+                    .iter_mut()
                     .zip((1..).into_iter())
                     .for_each(|(x, current_idx)| {
                         x.next = Index(current_idx + 1);
                         x.prev = Index(current_idx - 1);
-                });
+                    });
             };
         }
     }
@@ -1009,7 +1011,7 @@ impl<T: Clone> From<&[T]> for TsilCev<T> {
     /// assert_eq!(tc.to_vec(), &[0, 1, 2, 3, 4]);
     /// ```
     fn from(slice: &[T]) -> Self {
-        if slice.len() == 0 {
+        if slice.is_empty() {
             Self::new()
         } else if slice.len() == 1 {
             Self {
@@ -1046,15 +1048,18 @@ impl<T: Clone> From<&[T]> for TsilCev<T> {
                 };
 
                 // safe because slice.len() > 1 and tsil_cev.end >= 1
-                tsil_cev.cev.get_unchecked_mut(1..tsil_cev.end.0).iter_mut()
+                tsil_cev
+                    .cev
+                    .get_unchecked_mut(1..tsil_cev.end.0)
+                    .iter_mut()
                     .zip(slice.get_unchecked(1..).iter().zip((1..).into_iter()))
-                    .for_each(|(x, (val, current_idx))|
+                    .for_each(|(x, (val, current_idx))| {
                         *x = Val {
                             el: val.clone(),
                             next: Index(current_idx + 1),
                             prev: Index(current_idx - 1),
                         }
-                    );
+                    });
             }
             tsil_cev
         }
@@ -1072,7 +1077,7 @@ impl<T> From<Vec<T>> for TsilCev<T> {
     /// assert_eq!(tc.to_vec(), &[0, 1, 2, 3, 4]);
     /// ```
     fn from(vec: Vec<T>) -> Self {
-        if vec.len() == 0 {
+        if vec.is_empty() {
             Self::new()
         } else if vec.len() == 1 {
             Self {
@@ -1109,15 +1114,18 @@ impl<T> From<Vec<T>> for TsilCev<T> {
                 };
 
                 // safe because vec.len() > 1 and tsil_cev.end >= 1
-                tsil_cev.cev.get_unchecked_mut(1..tsil_cev.end.0).iter_mut()
+                tsil_cev
+                    .cev
+                    .get_unchecked_mut(1..tsil_cev.end.0)
+                    .iter_mut()
                     .zip(vec.into_iter().skip(1).zip((1..).into_iter()))
-                    .for_each(|(x, (val, current_idx))|
+                    .for_each(|(x, (val, current_idx))| {
                         *x = Val {
                             el: val,
                             next: Index(current_idx + 1),
                             prev: Index(current_idx - 1),
                         }
-                    );
+                    });
             }
             tsil_cev
         }
@@ -1184,7 +1192,10 @@ impl<'t, T: 't> Cursor<'t, T> {
     /// ```
     #[inline]
     pub fn current(&self) -> Option<&T> {
-        debug_assert!(self.idx.to_option().map_or(true, |x| x < self.tsil_cev.cev.len()));
+        debug_assert!(self
+            .idx
+            .to_option()
+            .map_or(true, |x| x < self.tsil_cev.cev.len()));
 
         // safe because 0 <= Some(self.idx) < cev.len because self.idx traversal on tsil_cev
         Some(unsafe { &self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).el })
@@ -1202,7 +1213,10 @@ impl<'t, T: 't> Cursor<'t, T> {
     /// ```
     #[inline]
     pub unsafe fn current_unchecked(&self) -> &T {
-        debug_assert!(self.idx.to_option().map_or(false, |x| x < self.tsil_cev.cev.len()));
+        debug_assert!(self
+            .idx
+            .to_option()
+            .map_or(false, |x| x < self.tsil_cev.cev.len()));
 
         &self.tsil_cev.cev.get_unchecked(self.idx.0).el
     }
@@ -1515,7 +1529,13 @@ impl<'t, T: 't> Cursor<'t, T> {
             let next_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).next };
             Some(unsafe { &self.tsil_cev.cev.get_unchecked(next_idx.0).el })
         } else {
-            Some(unsafe { &self.tsil_cev.cev.get_unchecked(self.tsil_cev.start.to_option()?).el })
+            Some(unsafe {
+                &self
+                    .tsil_cev
+                    .cev
+                    .get_unchecked(self.tsil_cev.start.to_option()?)
+                    .el
+            })
         }
     }
 
@@ -1539,7 +1559,13 @@ impl<'t, T: 't> Cursor<'t, T> {
             let prev_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).prev };
             Some(unsafe { &self.tsil_cev.cev.get_unchecked(prev_idx.0).el })
         } else {
-            Some(unsafe { &self.tsil_cev.cev.get_unchecked(self.tsil_cev.end.to_option()?).el })
+            Some(unsafe {
+                &self
+                    .tsil_cev
+                    .cev
+                    .get_unchecked(self.tsil_cev.end.to_option()?)
+                    .el
+            })
         }
     }
 
@@ -1582,9 +1608,7 @@ impl<'t, T: 't> Cursor<'t, T> {
     /// ```
     #[inline]
     pub const fn iter_tsil(self) -> TsilIter<'t, T> {
-        TsilIter {
-            cursor: self,
-        }
+        TsilIter { cursor: self }
     }
 }
 
@@ -1606,7 +1630,10 @@ impl<'t, T: 't> CursorMut<'t, T> {
     /// ```
     #[inline]
     pub fn current(&self) -> Option<&T> {
-        debug_assert!(self.idx.to_option().map_or(true, |x| x < self.tsil_cev.cev.len()));
+        debug_assert!(self
+            .idx
+            .to_option()
+            .map_or(true, |x| x < self.tsil_cev.cev.len()));
 
         // safe because 0 <= Some(self.idx) < cev.len because self.idx traversal on tsil_cev
         Some(unsafe { &self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).el })
@@ -1624,7 +1651,10 @@ impl<'t, T: 't> CursorMut<'t, T> {
     /// ```
     #[inline]
     pub unsafe fn current_unchecked(&self) -> &T {
-        debug_assert!(self.idx.to_option().map_or(false, |x| x < self.tsil_cev.cev.len()));
+        debug_assert!(self
+            .idx
+            .to_option()
+            .map_or(false, |x| x < self.tsil_cev.cev.len()));
 
         &self.tsil_cev.cev.get_unchecked(self.idx.0).el
     }
@@ -1645,10 +1675,19 @@ impl<'t, T: 't> CursorMut<'t, T> {
     /// ```
     #[inline]
     pub fn current_mut(&mut self) -> Option<&mut T> {
-        debug_assert!(self.idx.to_option().map_or(true, |x| x < self.tsil_cev.cev.len()));
+        debug_assert!(self
+            .idx
+            .to_option()
+            .map_or(true, |x| x < self.tsil_cev.cev.len()));
 
         // safe because 0 <= Some(self.idx) < cev.len because self.idx traversal on tsil_cev
-        Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(self.idx.to_option()?).el })
+        Some(unsafe {
+            &mut self
+                .tsil_cev
+                .cev
+                .get_unchecked_mut(self.idx.to_option()?)
+                .el
+        })
     }
 
     /// Returns a mutable reference to the element that the cursor is currently
@@ -1664,7 +1703,10 @@ impl<'t, T: 't> CursorMut<'t, T> {
     /// ```
     #[inline]
     pub unsafe fn current_unchecked_mut(&mut self) -> &mut T {
-        debug_assert!(self.idx.to_option().map_or(false, |x| x < self.tsil_cev.cev.len()));
+        debug_assert!(self
+            .idx
+            .to_option()
+            .map_or(false, |x| x < self.tsil_cev.cev.len()));
 
         &mut self.tsil_cev.cev.get_unchecked_mut(self.idx.0).el
     }
@@ -1937,7 +1979,13 @@ impl<'t, T: 't> CursorMut<'t, T> {
         // safe because self.idx.to_option()? and self.idx traversal on tsil_cev
         let next_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).next };
         // safe because next_idx.to_option()? and self.idx traversal on tsil_cev
-        Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(next_idx.to_option()?).el })
+        Some(unsafe {
+            &mut self
+                .tsil_cev
+                .cev
+                .get_unchecked_mut(next_idx.to_option()?)
+                .el
+        })
     }
 
     /// Returns a mutable reference to the prev element or `None` if cursor empty
@@ -1956,7 +2004,13 @@ impl<'t, T: 't> CursorMut<'t, T> {
         // safe because self.idx.to_option()? and self.idx traversal on tsil_cev
         let prev_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.to_option()?).prev };
         // safe because prev_idx.to_option()? and self.idx traversal on tsil_cev
-        Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(prev_idx.to_option()?).el })
+        Some(unsafe {
+            &mut self
+                .tsil_cev
+                .cev
+                .get_unchecked_mut(prev_idx.to_option()?)
+                .el
+        })
     }
 
     /// Returns a mutable reference to the next element or `None` if `TsilCev` empty.
@@ -1979,7 +2033,13 @@ impl<'t, T: 't> CursorMut<'t, T> {
             let next_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).next };
             Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(next_idx.0).el })
         } else {
-            Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(self.tsil_cev.start.to_option()?).el })
+            Some(unsafe {
+                &mut self
+                    .tsil_cev
+                    .cev
+                    .get_unchecked_mut(self.tsil_cev.start.to_option()?)
+                    .el
+            })
         }
     }
 
@@ -2003,7 +2063,13 @@ impl<'t, T: 't> CursorMut<'t, T> {
             let prev_idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).prev };
             Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(prev_idx.0).el })
         } else {
-            Some(unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(self.tsil_cev.end.to_option()?).el })
+            Some(unsafe {
+                &mut self
+                    .tsil_cev
+                    .cev
+                    .get_unchecked_mut(self.tsil_cev.end.to_option()?)
+                    .el
+            })
         }
     }
 
@@ -2092,9 +2158,7 @@ impl<'t, T: 't> CursorMut<'t, T> {
     /// ```
     #[inline]
     pub const fn iter_tsil_mut(self) -> TsilIterMut<'t, T> {
-        TsilIterMut {
-            cursor: self,
-        }
+        TsilIterMut { cursor: self }
     }
 
     /// Insert elements before current cursor position in `LinkedList` order.
@@ -2158,7 +2222,7 @@ impl<'t, T: 't> CursorMut<'t, T> {
     }
 
     /// Removes and return the current element from the `TsilCev` and move current
-    /// cursor to the next position in `LinkedList` order. If the cursor is empty 
+    /// cursor to the next position in `LinkedList` order. If the cursor is empty
     /// then no remove and `None` is returned.
     /// ```
     /// use tsil_cev::TsilCev;
@@ -2271,7 +2335,7 @@ pub struct TsilIter<'t, T: 't> {
 
 #[derive(Clone)]
 pub struct TsilIntoIter<T> {
-    tsil_cev: TsilCev<T>
+    tsil_cev: TsilCev<T>,
 }
 
 impl<'t, T: 't> Iterator for TsilIter<'t, T> {
@@ -2421,7 +2485,9 @@ impl<'t, T: 't> Iterator for CevIterMut<'t, T> {
             self.pos += 1;
             // safe because Rust can't deduce that we won't return multiple references to the same value
             // safe by previous check
-            return Some(unsafe { &mut *(&mut self.tsil_cev.cev.get_unchecked_mut(x).el as *mut _) });
+            return Some(unsafe {
+                &mut *(&mut self.tsil_cev.cev.get_unchecked_mut(x).el as *mut _)
+            });
         }
         None
     }
@@ -2549,7 +2615,7 @@ impl<T> Extend<T> for TsilCev<T> {
         // iter.into_iter().for_each(move |x| self.push_back(x));
 
         let mut into_iter = iter.into_iter();
-        if self.cev.len() == 0 {
+        if self.cev.is_empty() {
             if let Some(x) = into_iter.next() {
                 self.cev.reserve(into_iter.size_hint().0.saturating_add(1));
                 // safe because allocate size >= 1
@@ -2570,14 +2636,13 @@ impl<T> Extend<T> for TsilCev<T> {
         let old_len = self.cev.len();
         self.cev.extend(
             into_iter
-            .zip((old_len..).into_iter())
-            .map(move |(x, current_idx)|
-                Val {
+                .zip((old_len..).into_iter())
+                .map(move |(x, current_idx)| Val {
                     el: x,
                     next: Index(current_idx + 1),
                     prev: Index(current_idx - 1),
-                }
-        ));
+                }),
+        );
         let new_len = self.cev.len();
         if new_len != old_len {
             // not overflow because new_len >= 1
@@ -2623,10 +2688,6 @@ impl<T: PartialEq> PartialEq for TsilCev<T> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.len() == other.len() && self.iter_tsil().eq(other)
-    }
-    #[inline]
-    fn ne(&self, other: &Self) -> bool {
-        !self.eq(other)
     }
 }
 
