@@ -45,6 +45,13 @@
 //! then it is reallocated to size `capacity / 2`. The time
 //! of addition and removal is amortized to `O(1)`.
 
+//! ## Optional features
+//!
+//! ### `serde`
+//!
+//! When this optional dependency is enabled, `TsilCev` implements the
+//! `serde::Serialize` and `serde::Deserialize` traits.
+
 #![no_std]
 
 #[macro_use]

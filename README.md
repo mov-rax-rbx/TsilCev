@@ -48,3 +48,10 @@ element has two indexes (next and previous element).
 Also if the number of elements is less than `capacity / 4`
 then it is reallocated to size `capacity / 2`. The time
 of addition and removal is amortized to `O(1)`.
+
+## Optional features
+
+### `serde`
+
+When this optional dependency is enabled, `TsilCev` implements the
+`serde::Serialize` and `serde::Deserialize` traits.
