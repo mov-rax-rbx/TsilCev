@@ -50,6 +50,9 @@
 #[macro_use]
 extern crate alloc;
 
+#[cfg(feature = "serde")]
+mod serde;
+
 use crate::index::Index;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
@@ -2715,7 +2718,7 @@ impl<T> Extend<T> for TsilCev<T> {
         );
         let new_len = self.cev.len();
         if new_len != old_len {
-            // not overflow because new_len >= 1
+            // not underflow because new_len >= 1
             let last = new_len - 1;
             // safe because 0 <= last and old_len < self.cev.len
             unsafe {
