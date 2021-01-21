@@ -100,7 +100,7 @@ fn test_pop() {
     }
 
     let etalon = Vec::<usize>::new();
-    assert_eq!(tc_pop_back.clone().to_vec(), etalon);
+    assert_eq!(tc_pop_back.clone().into_vec(), etalon);
     assert_eq!(tc_pop_back.len(), etalon.len());
     assert_eq!(tc_pop_back.front(), etalon.first());
     assert_eq!(tc_pop_back.back(), etalon.last());
@@ -111,7 +111,7 @@ fn test_pop() {
     }
 
     let etalon = Vec::<usize>::new();
-    assert_eq!(tc_pop_front.clone().to_vec(), etalon);
+    assert_eq!(tc_pop_front.clone().into_vec(), etalon);
     assert_eq!(tc_pop_front.len(), etalon.len());
     assert_eq!(tc_pop_front.front(), etalon.first());
     assert_eq!(tc_pop_front.back(), etalon.last());
@@ -316,7 +316,7 @@ fn test_remove_balance() {
     let etalon = (50..64).into_iter().map(|x| x).collect::<Vec<_>>();
     assert_eq!(tc.len(), 14);
     assert_eq!(tc.capacity(), 64 / 2);
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
 
     let old_dencity = tc.len();
     tc.pop_back();
@@ -345,7 +345,7 @@ fn test_clear() {
 
     let etalon = vec![500, 50];
 
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
@@ -362,7 +362,7 @@ fn test_clear() {
 
     let etalon = vec![500, 50];
 
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
@@ -380,7 +380,7 @@ fn test_clear() {
 
     let etalon = vec![500, 50];
 
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
@@ -414,12 +414,12 @@ fn test_cursor_idx() {
     assert_eq!(*tc.cursor_idx_tsil_mut(3).current().unwrap(), etalon[3]);
     assert_eq!(*tc.cursor_idx_tsil_mut(11).current().unwrap(), etalon[11]);
 
-    let v = tc.to_vec();
+    let v = tc.into_vec();
     assert_eq!(v, etalon);
 }
 
 #[test]
-fn test_to_vec() {
+fn test_into_vec() {
     let mut tc = TsilCev::new();
     tc.push_back(500);
     tc.push_back(501);
@@ -437,7 +437,7 @@ fn test_to_vec() {
     tc.push_front(501);
     tc.push_front(500);
 
-    let v = tc.clone().to_vec();
+    let v = tc.clone().into_vec();
     let etalon = vec![
         500, 501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510, 508,
     ];
@@ -462,7 +462,7 @@ fn test_from() {
         500, 501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510, 508,
     ];
     let mut tc = TsilCev::from(&etalon);
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
@@ -481,28 +481,28 @@ fn test_from() {
         4000, 3000, 2000, 1000, 500, 501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510,
         508, 100, 200, 300, 400,
     ];
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
     let etalon = vec![500, 501];
     let tc = TsilCev::from(&etalon);
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
     let etalon = vec![500];
     let tc = TsilCev::from(&etalon);
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
 
     let etalon = Vec::<usize>::new();
     let tc = TsilCev::from(&etalon);
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
@@ -511,7 +511,7 @@ fn test_from() {
         500, 501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510, 508,
     ];
     let mut tc = TsilCev::from(etalon.clone());
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
@@ -530,7 +530,7 @@ fn test_from() {
         4000, 3000, 2000, 1000, 500, 501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510,
         508, 100, 200, 300, 400,
     ];
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
@@ -551,49 +551,49 @@ fn test_drain_filter_tsil() {
 
     let del_500 = tc.drain_filter_tsil(|x| *x == 500).collect::<Vec<_>>();
     assert_eq!(del_500, [500].repeat(129));
-    assert_eq!(tc.clone().to_vec(), vec![510, 508, 501, 502]);
+    assert_eq!(tc.clone().into_vec(), vec![510, 508, 501, 502]);
 
     tc.pop_back();
     tc.pop_back();
-    assert_eq!(tc.clone().to_vec(), vec![510, 508]);
+    assert_eq!(tc.clone().into_vec(), vec![510, 508]);
     tc.push_back(1000);
     tc.push_back(1001);
     tc.push_back(1002);
     tc.push_back(1003);
     tc.push_back(1004);
     assert_eq!(
-        tc.clone().to_vec(),
+        tc.clone().into_vec(),
         vec![510, 508, 1000, 1001, 1002, 1003, 1004]
     );
     tc.pop_front();
     tc.pop_front();
-    assert_eq!(tc.clone().to_vec(), vec![1000, 1001, 1002, 1003, 1004]);
+    assert_eq!(tc.clone().into_vec(), vec![1000, 1001, 1002, 1003, 1004]);
     tc.cursor_front_mut().remove().remove();
-    assert_eq!(tc.clone().to_vec(), vec![1002, 1003, 1004]);
+    assert_eq!(tc.clone().into_vec(), vec![1002, 1003, 1004]);
     tc.cursor_back_mut().move_prev_length(2).remove().remove();
-    assert_eq!(tc.clone().to_vec(), vec![1004]);
+    assert_eq!(tc.clone().into_vec(), vec![1004]);
 
     assert_eq!(tc.cursor_back_mut().move_prev_length(2).current(), None);
     assert_eq!(tc.cursor_front_mut().move_prev_length(2).current(), None);
     assert_eq!(tc.cursor_back().move_prev_length(2).current(), None);
     assert_eq!(tc.cursor_front_mut().move_prev_length(2).current(), None);
-    assert_eq!(tc.clone().to_vec(), vec![1004]);
+    assert_eq!(tc.clone().into_vec(), vec![1004]);
     tc.cursor_front_mut().insert_before(0).insert_after(1);
-    assert_eq!(tc.clone().to_vec(), vec![0, 1004, 1]);
+    assert_eq!(tc.clone().into_vec(), vec![0, 1004, 1]);
 
     let _ = tc.drain_filter_tsil(|x| *x == 1).count();
-    assert_eq!(tc.clone().to_vec(), vec![0, 1004]);
+    assert_eq!(tc.clone().into_vec(), vec![0, 1004]);
     tc.push_back(500);
     tc.push_front(0);
-    assert_eq!(tc.clone().to_vec(), vec![0, 0, 1004, 500]);
+    assert_eq!(tc.clone().into_vec(), vec![0, 0, 1004, 500]);
 
     tc.clear();
     tc.drain_filter_tsil(|x| *x == 0);
-    assert_eq!(tc.clone().to_vec(), vec![]);
+    assert_eq!(tc.clone().into_vec(), vec![]);
 
     let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4, 5]);
     let _ = tc.drain_filter_tsil(|_| true).collect::<Vec<_>>();
-    assert_eq!(tc.to_vec(), &[]);
+    assert_eq!(tc.into_vec(), &[]);
 }
 
 #[test]
@@ -611,49 +611,49 @@ fn test_drain_filter_cev() {
 
     let del_500 = tc.drain_filter_cev(|x| *x == 500).collect::<Vec<_>>();
     assert_eq!(del_500, [500].repeat(129));
-    assert_eq!(tc.clone().to_vec(), vec![510, 508, 501, 502]);
+    assert_eq!(tc.clone().into_vec(), vec![510, 508, 501, 502]);
 
     tc.pop_back();
     tc.pop_back();
-    assert_eq!(tc.clone().to_vec(), vec![510, 508]);
+    assert_eq!(tc.clone().into_vec(), vec![510, 508]);
     tc.push_back(1000);
     tc.push_back(1001);
     tc.push_back(1002);
     tc.push_back(1003);
     tc.push_back(1004);
     assert_eq!(
-        tc.clone().to_vec(),
+        tc.clone().into_vec(),
         vec![510, 508, 1000, 1001, 1002, 1003, 1004]
     );
     tc.pop_front();
     tc.pop_front();
-    assert_eq!(tc.clone().to_vec(), vec![1000, 1001, 1002, 1003, 1004]);
+    assert_eq!(tc.clone().into_vec(), vec![1000, 1001, 1002, 1003, 1004]);
     tc.cursor_front_mut().remove().remove();
-    assert_eq!(tc.clone().to_vec(), vec![1002, 1003, 1004]);
+    assert_eq!(tc.clone().into_vec(), vec![1002, 1003, 1004]);
     tc.cursor_back_mut().move_prev_length(2).remove().remove();
-    assert_eq!(tc.clone().to_vec(), vec![1004]);
+    assert_eq!(tc.clone().into_vec(), vec![1004]);
 
     assert_eq!(tc.cursor_back_mut().move_prev_length(2).current(), None);
     assert_eq!(tc.cursor_front_mut().move_prev_length(2).current(), None);
     assert_eq!(tc.cursor_back().move_prev_length(2).current(), None);
     assert_eq!(tc.cursor_front_mut().move_prev_length(2).current(), None);
-    assert_eq!(tc.clone().to_vec(), vec![1004]);
+    assert_eq!(tc.clone().into_vec(), vec![1004]);
     tc.cursor_front_mut().insert_before(0).insert_after(1);
-    assert_eq!(tc.clone().to_vec(), vec![0, 1004, 1]);
+    assert_eq!(tc.clone().into_vec(), vec![0, 1004, 1]);
 
     let _ = tc.drain_filter_cev(|x| *x == 1).count();
-    assert_eq!(tc.clone().to_vec(), vec![0, 1004]);
+    assert_eq!(tc.clone().into_vec(), vec![0, 1004]);
     tc.push_back(500);
     tc.push_front(0);
-    assert_eq!(tc.clone().to_vec(), vec![0, 0, 1004, 500]);
+    assert_eq!(tc.clone().into_vec(), vec![0, 0, 1004, 500]);
 
     tc.clear();
     tc.drain_filter_cev(|x| *x == 0);
-    assert_eq!(tc.clone().to_vec(), vec![]);
+    assert_eq!(tc.clone().into_vec(), vec![]);
 
     let mut tc = TsilCev::from(vec![0, 1, 2, 3, 4, 5]);
     let _ = tc.drain_filter_cev(|_| true).collect::<Vec<_>>();
-    assert_eq!(tc.to_vec(), &[]);
+    assert_eq!(tc.into_vec(), &[]);
 }
 
 #[test]
@@ -664,14 +664,14 @@ fn test_extend() {
 
     let mut tc = TsilCev::from(vec![0]);
     tc.extend(&[1, 2]);
-    assert_eq!(tc.to_vec(), &[0, 1, 2]);
+    assert_eq!(tc.into_vec(), &[0, 1, 2]);
 
     let etalon = vec![
         500, 501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510, 508,
     ];
     let mut tc = TsilCev::from(etalon.iter().take(8).map(|x| x.clone()).collect::<Vec<_>>());
     tc.extend(etalon.iter().skip(8));
-    assert_eq!(tc.clone().to_vec(), etalon.clone());
+    assert_eq!(tc.clone().into_vec(), etalon.clone());
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
@@ -699,7 +699,7 @@ fn test_extend() {
         4000, 3000, 2000, 1000, 500, 501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510,
         508, 100, 200, 300, 400,
     ];
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
@@ -707,7 +707,7 @@ fn test_extend() {
     let etalon = vec![500, 501];
     let mut tc = TsilCev::<usize>::new();
     tc.extend(&etalon);
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
@@ -715,7 +715,7 @@ fn test_extend() {
     let etalon = vec![500];
     let mut tc = TsilCev::<usize>::new();
     tc.extend(&etalon);
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
@@ -723,7 +723,7 @@ fn test_extend() {
     let etalon = Vec::<usize>::new();
     let mut tc = TsilCev::<usize>::new();
     tc.extend(&etalon);
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
@@ -733,7 +733,7 @@ fn test_extend() {
     ];
     let mut tc = TsilCev::<usize>::new();
     tc.extend(&etalon);
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
@@ -752,7 +752,7 @@ fn test_extend() {
         4000, 3000, 2000, 1000, 500, 501, 502, 503, 504, 510, 508, 500, 501, 502, 503, 504, 510,
         508, 100, 200, 300, 400,
     ];
-    assert_eq!(tc.clone().to_vec(), etalon);
+    assert_eq!(tc.clone().into_vec(), etalon);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
@@ -763,18 +763,18 @@ fn test_sort() {
     let mut tc = TsilCev::<usize>::new();
     tc.sort_by(|x, y| x.cmp(y));
 
-    assert_eq!(tc.to_vec(), &[]);
+    assert_eq!(tc.into_vec(), &[]);
 
     let mut tc = TsilCev::from(vec![0]);
     tc.sort_by(|x, y| x.cmp(y));
 
-    assert_eq!(tc.to_vec(), &[0]);
+    assert_eq!(tc.into_vec(), &[0]);
 
     let etalon = vec![-1, -2, 0, 1, 2];
     let mut tc = TsilCev::from(&etalon);
     tc.sort_by(|x, y| x.cmp(y));
 
-    assert_eq!(tc.clone().to_vec(), &[-2, -1, 0, 1, 2]);
+    assert_eq!(tc.clone().into_vec(), &[-2, -1, 0, 1, 2]);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), Some(&-2));
     assert_eq!(tc.back(), Some(&2));
@@ -783,7 +783,7 @@ fn test_sort() {
     let mut tc = TsilCev::from(&etalon);
     tc.sort_unstable_by(|x, y| x.cmp(y));
 
-    assert_eq!(tc.clone().to_vec(), &[-2, -1, 0, 1, 2]);
+    assert_eq!(tc.clone().into_vec(), &[-2, -1, 0, 1, 2]);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), Some(&-2));
     assert_eq!(tc.back(), Some(&2));
@@ -792,7 +792,7 @@ fn test_sort() {
     let mut tc = TsilCev::from(&etalon);
     tc.sort_by_key(|x| x.abs());
 
-    assert_eq!(tc.clone().to_vec(), &[0, -1, 1, -2, 2]);
+    assert_eq!(tc.clone().into_vec(), &[0, -1, 1, -2, 2]);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), Some(&0));
     assert_eq!(tc.back(), Some(&2));
@@ -801,7 +801,7 @@ fn test_sort() {
     let mut tc = TsilCev::from(&etalon);
     tc.sort_unstable_by_key(|x| x.abs());
 
-    assert_eq!(tc.clone().to_vec(), &[0, -1, 1, -2, 2]);
+    assert_eq!(tc.clone().into_vec(), &[0, -1, 1, -2, 2]);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), Some(&0));
     assert_eq!(tc.back(), Some(&2));
@@ -810,7 +810,7 @@ fn test_sort() {
     let mut tc = TsilCev::from(&etalon);
     tc.sort_by_cached_key(|x| x.abs());
 
-    assert_eq!(tc.clone().to_vec(), &[0, -1, 1, -2, 2]);
+    assert_eq!(tc.clone().into_vec(), &[0, -1, 1, -2, 2]);
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), Some(&0));
     assert_eq!(tc.back(), Some(&2));
