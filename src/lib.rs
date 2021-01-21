@@ -88,7 +88,7 @@ pub(crate) mod index {
         pub(crate) const None: Index = Index(usize::MAX);
         #[inline]
         pub(crate) const fn is_none(self) -> bool {
-            self.0 == Index::None.0
+            self.to_option().is_none()
         }
         #[inline]
         pub(crate) const fn to_option(self) -> Option<usize> {
@@ -209,6 +209,7 @@ impl<T> TsilCev<T> {
     pub fn iter_tsil(&self) -> TsilIter<T> {
         TsilIter {
             cursor: self.cursor_front(),
+            skips: 0,
         }
     }
 
@@ -230,6 +231,7 @@ impl<T> TsilCev<T> {
     pub fn iter_tsil_mut(&mut self) -> TsilIterMut<T> {
         TsilIterMut {
             cursor: self.cursor_front_mut(),
+            skips: 0,
         }
     }
 
@@ -247,7 +249,7 @@ impl<T> TsilCev<T> {
     /// assert_eq!(cev_iter.next(), None);
     /// ```
     #[inline]
-    pub fn iter_cev(&self) -> CevIter<T> {
+    pub const fn iter_cev(&self) -> CevIter<T> {
         CevIter {
             tsil_cev: self,
             pos: 0,
@@ -308,11 +310,10 @@ impl<T> TsilCev<T> {
     where
         F: FnMut(&mut T) -> bool,
     {
-        let len = self.cev.len();
         DrainFilterTsil {
             cursor: self.cursor_front_mut(),
             pred: pred,
-            old_len: len,
+            skips: 0,
         }
     }
 
@@ -350,12 +351,10 @@ impl<T> TsilCev<T> {
     where
         F: FnMut(&mut T) -> bool,
     {
-        let len = self.cev.len();
         DrainFilterCev {
             tsil_cev: self,
-            pos: 0,
             pred: pred,
-            old_len: len,
+            skips: 0,
         }
     }
 
@@ -442,10 +441,8 @@ impl<T> TsilCev<T> {
     /// ```
     #[inline]
     pub fn cursor_front(&self) -> Cursor<'_, T> {
-        // safe because always have first element
         Cursor {
             tsil_cev: self,
-            // safe because check back not empty
             idx: self.start(),
         }
     }
@@ -461,10 +458,8 @@ impl<T> TsilCev<T> {
     /// ```
     #[inline]
     pub fn cursor_back(&self) -> Cursor<'_, T> {
-        // safe because always have first element
         Cursor {
             tsil_cev: self,
-            // safe because check back not empty
             idx: self.end(),
         }
     }
@@ -484,9 +479,7 @@ impl<T> TsilCev<T> {
     /// ```
     #[inline]
     pub fn cursor_front_mut(&mut self) -> CursorMut<'_, T> {
-        // safe because check back not empty
         let start = self.start();
-        // safe because always have first element
         CursorMut {
             tsil_cev: self,
             idx: start,
@@ -508,9 +501,7 @@ impl<T> TsilCev<T> {
     /// ```
     #[inline]
     pub fn cursor_back_mut(&mut self) -> CursorMut<'_, T> {
-        // safe because check back not empty
         let end = self.end();
-        // safe because always have first element
         CursorMut {
             tsil_cev: self,
             idx: end,
@@ -802,6 +793,7 @@ impl<T> TsilCev<T> {
     /// assert_eq!(tc.to_vec(), &[0, 1, 2, 3, 4, 5]);
     /// ```
     pub fn push_back(&mut self, val: T) {
+        // safe because end is None or end < self.len
         unsafe { self.insert(self.end(), Index::None, val) };
     }
 
@@ -817,7 +809,7 @@ impl<T> TsilCev<T> {
     /// ```
     pub fn pop_back(&mut self) -> Option<T> {
         let end = self.end().to_option()?;
-        // safe because value is never read until a new value is added
+        // safe because end is None or end < self.len
         Some(unsafe { self.make_empty(end) }.0)
     }
 
@@ -832,6 +824,7 @@ impl<T> TsilCev<T> {
     /// assert_eq!(tc.to_vec(), &[5, 0, 1, 2, 3, 4]);
     /// ```
     pub fn push_front(&mut self, val: T) {
+        // safe because start is None or start < self.len
         unsafe { self.insert(Index::None, self.start(), val) };
     }
 
@@ -847,7 +840,7 @@ impl<T> TsilCev<T> {
     /// ```
     pub fn pop_front(&mut self) -> Option<T> {
         let start = self.start().to_option()?;
-        // safe because value is never read until a new value is added
+        // safe because start is None or start < self.len
         Some(unsafe { self.make_empty(start) }.0)
     }
 
@@ -872,7 +865,7 @@ impl<T> TsilCev<T> {
             prev.to_option().map_or(true, |x| x < self.cev.len())
                 && next.to_option().map_or(true, |x| x < self.cev.len())
         );
-        // safe because 0 <= x and y < cev.len
+        // safe if 0 <= x and y < cev.len
         match (prev.to_option(), next.to_option()) {
             (None, None) => {
                 self.start = Index::None;
@@ -900,7 +893,7 @@ impl<T> TsilCev<T> {
                 && next.to_option().map_or(true, |x| x < self.cev.len())
                 && current.to_option().map_or(false, |x| x < self.cev.len())
         );
-        // safe because 0 <= x and y and z < cev.len
+        // safe if 0 <= x and y and z < cev.len
         match (prev.to_option(), current.to_option(), next.to_option()) {
             (None, Some(z), None) => {
                 self.start = Index(z);
@@ -937,7 +930,6 @@ impl<T> TsilCev<T> {
         }
         let ret = self.remove_last_mem().el;
 
-        // safe because we know that index reorder and save index (save_idx)
         self.try_realoc();
         (
             ret,
@@ -1638,29 +1630,6 @@ impl<'t, T: 't> Cursor<'t, T> {
             idx: self.idx,
         }
     }
-
-    /// Returns `Tsil` iterator from current cursor position.
-    /// Iterating as in `LinkedList`.
-    /// ```
-    /// use tsil_cev::TsilCev;
-    ///
-    /// let mut tc = TsilCev::new();
-    /// tc.push_back(3);
-    /// tc.push_back(4);
-    /// tc.push_front(2);
-    /// tc.push_front(1);
-    /// tc.push_front(0);
-    ///
-    /// let mut cursor = tc.cursor_front().move_next().finish();
-    /// assert_eq!(
-    ///     cursor.iter_tsil().map(|x| x.clone()).collect::<Vec<_>>(),
-    ///     &[1, 2, 3, 4]
-    /// ); // note the order of the sequence (Tsil iterator)
-    /// ```
-    #[inline]
-    pub const fn iter_tsil(self) -> TsilIter<'t, T> {
-        TsilIter { cursor: self }
-    }
 }
 
 pub struct CursorMut<'t, T: 't> {
@@ -2193,54 +2162,6 @@ impl<'t, T: 't> CursorMut<'t, T> {
         }
     }
 
-    /// Returns `Tsil` iterator from current cursor position.
-    /// Iterating as in `LinkedList`.
-    /// ```
-    /// use tsil_cev::TsilCev;
-    ///
-    /// let mut tc = TsilCev::new();
-    /// tc.push_back(3);
-    /// tc.push_back(4);
-    /// tc.push_front(2);
-    /// tc.push_front(1);
-    /// tc.push_front(0);
-    ///
-    /// let mut cursor = tc.cursor_front_mut().move_next().finish();
-    /// assert_eq!(
-    ///     cursor.iter_tsil().map(|x| x.clone()).collect::<Vec<_>>(),
-    ///     &[1, 2, 3, 4]
-    /// ); // note the order of the sequence (Tsil iterator)
-    /// ```
-    #[inline]
-    pub const fn iter_tsil(self) -> TsilIter<'t, T> {
-        TsilIter {
-            cursor: self.to_cursor(),
-        }
-    }
-
-    /// Returns mutable `Tsil` iterator from current cursor position.
-    /// Iterating as in `LinkedList`.
-    /// ```
-    /// use tsil_cev::TsilCev;
-    ///
-    /// let mut tc = TsilCev::new();
-    /// tc.push_back(3);
-    /// tc.push_back(4);
-    /// tc.push_front(2);
-    /// tc.push_front(1);
-    /// tc.push_front(0);
-    ///
-    /// let mut cursor = tc.cursor_front_mut().move_next().finish();
-    /// assert_eq!(
-    ///     cursor.iter_tsil_mut().map(|x| x.clone() + 1).collect::<Vec<_>>(),
-    ///     &[2, 3, 4, 5]
-    /// ); // note the order of the sequence (Tsil iterator)
-    /// ```
-    #[inline]
-    pub const fn iter_tsil_mut(self) -> TsilIterMut<'t, T> {
-        TsilIterMut { cursor: self }
-    }
-
     /// Insert elements before current cursor position in `LinkedList` order.
     /// Current cursor position don't move. If the cursor is empty then the
     /// new element is inserted at the back (end) of the `TsilCev`.
@@ -2359,58 +2280,17 @@ impl<'t, T: 't> CursorMut<'t, T> {
         let _ = self.owned();
         self
     }
-
-    /// Creates an `Tsil` iterator from current cursor position
-    /// which uses a mutate closure to determine if an element
-    /// should be removed like in `LinkedList`.
-    ///
-    /// If the closure returns true, then the element is removed and yielded.
-    /// If the closure returns false, the element will remain in the `TsilCev`
-    /// and will not be yielded
-    /// by the iterator.
-    /// ```
-    /// use tsil_cev::TsilCev;
-    ///
-    /// let mut tc = TsilCev::new();
-    /// tc.push_front(4);
-    /// tc.push_front(3);
-    /// tc.push_front(2);
-    /// tc.push_front(1);
-    /// tc.push_front(5);
-    /// tc.push_front(0);
-    /// tc.push_back(6);
-    /// tc.push_back(7);
-    /// tc.push_back(8);
-    /// tc.push_back(9);
-    ///
-    /// let great_four = tc.cursor_idx_tsil_mut(2) // skip 5
-    ///     .drain_filter_tsil(|x| *x > 4)
-    ///     .collect::<Vec<_>>();
-    ///
-    /// assert_eq!(great_four, &[6, 7, 8, 9]); // note the order of the sequence (Tsil iterator)
-    /// assert_eq!(tc.to_vec(), &[0, 5, 1, 2, 3, 4]);
-    /// ```
-    #[inline]
-    pub fn drain_filter_tsil<F>(self, pred: F) -> DrainFilterTsil<'t, T, F>
-    where
-        F: FnMut(&mut T) -> bool,
-    {
-        let len = self.tsil_cev.cev.len();
-        DrainFilterTsil {
-            cursor: self,
-            pred: pred,
-            old_len: len,
-        }
-    }
 }
 
 pub struct TsilIterMut<'t, T: 't> {
     cursor: CursorMut<'t, T>,
+    skips: usize,
 }
 
 #[derive(Clone)]
 pub struct TsilIter<'t, T: 't> {
     cursor: Cursor<'t, T>,
+    skips: usize,
 }
 
 #[derive(Clone)]
@@ -2427,12 +2307,14 @@ impl<'t, T: 't> Iterator for TsilIter<'t, T> {
         let x = Some(unsafe { &*(self.cursor.current()? as *const _) });
         // safe by previous check
         unsafe { self.cursor.move_next_unchecked() };
+        self.skips += 1;
         x
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.cursor.tsil_cev.len(), Some(self.cursor.tsil_cev.len()))
+        let len = self.cursor.tsil_cev.len() - self.skips;
+        (len, Some(len))
     }
 
     #[inline]
@@ -2450,12 +2332,14 @@ impl<'t, T: 't> Iterator for TsilIterMut<'t, T> {
         let x = Some(unsafe { &mut *(self.cursor.current_mut()? as *mut _) });
         // safe by previous check
         unsafe { self.cursor.move_next_unchecked() };
+        self.skips += 1;
         x
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.cursor.tsil_cev.len(), Some(self.cursor.tsil_cev.len()))
+        let len = self.cursor.tsil_cev.len() - self.skips;
+        (len, Some(len))
     }
 
     #[inline]
@@ -2546,7 +2430,8 @@ impl<'t, T: 't> Iterator for CevIter<'t, T> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.tsil_cev.len(), Some(self.tsil_cev.len()))
+        let len = self.tsil_cev.len() - self.pos;
+        (len, Some(len))
     }
 
     #[inline]
@@ -2574,7 +2459,8 @@ impl<'t, T: 't> Iterator for CevIterMut<'t, T> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.tsil_cev.len(), Some(self.tsil_cev.len()))
+        let len = self.tsil_cev.len() - self.pos;
+        (len, Some(len))
     }
 
     #[inline]
@@ -2589,7 +2475,7 @@ where
 {
     cursor: CursorMut<'t, T>,
     pred: F,
-    old_len: usize,
+    skips: usize,
 }
 
 impl<T, F> Iterator for DrainFilterTsil<'_, T, F>
@@ -2605,12 +2491,13 @@ where
             }
             // safe by previous check
             unsafe { self.cursor.move_next_unchecked() };
+            self.skips += 1;
         }
         None
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (0, Some(self.old_len - self.cursor.tsil_cev.len()))
+        (0, Some(self.cursor.tsil_cev.len() - self.skips))
     }
 }
 
@@ -2619,9 +2506,8 @@ where
     F: FnMut(&mut T) -> bool,
 {
     tsil_cev: &'t mut TsilCev<T>,
-    pos: usize,
     pred: F,
-    old_len: usize,
+    skips: usize,
 }
 
 impl<T, F> Iterator for DrainFilterCev<'_, T, F>
@@ -2631,18 +2517,18 @@ where
     type Item = T;
 
     fn next(&mut self) -> Option<T> {
-        while self.pos < self.tsil_cev.len() {
-            let x = unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(self.pos).el };
+        while self.skips < self.tsil_cev.len() {
+            let x = unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(self.skips).el };
             if (self.pred)(x) {
-                return Some(unsafe { self.tsil_cev.make_empty(self.pos) }.0);
+                return Some(unsafe { self.tsil_cev.make_empty(self.skips) }.0);
             }
-            self.pos += 1;
+            self.skips += 1;
         }
         None
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (0, Some(self.old_len - self.tsil_cev.len()))
+        (0, Some(self.tsil_cev.len() - self.skips))
     }
 }
 
