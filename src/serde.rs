@@ -17,15 +17,12 @@ impl<T: Serialize> Serialize for TsilCev<T> {
 
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for TsilCev<T> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_seq(TsilCevVisitor {
-            phantom: PhantomData,
-        })
+        deserializer.deserialize_seq(TsilCevVisitor(PhantomData))
     }
 }
 
-struct TsilCevVisitor<T> {
-    phantom: PhantomData<T>,
-}
+#[repr(transparent)]
+struct TsilCevVisitor<T>(phantom: PhantomData<T>)
 
 impl<'de, T: Deserialize<'de>> Visitor<'de> for TsilCevVisitor<T> {
     type Value = TsilCev<T>;
@@ -91,8 +88,7 @@ fn serde_1() {
     des.push_back(10);
 
     assert_eq!(trust.len(), des.len());
-    assert_eq!(trust, des);
-    assert_eq!(trust.to_vec(), des.to_vec());
+    assert_eq!(trust.into_vec(), des.into_vec());
 }
 
 #[test]
@@ -108,8 +104,7 @@ fn serde_2() {
     des.push_back(10);
 
     assert_eq!(trust.len(), des.len());
-    assert_eq!(trust, des);
-    assert_eq!(trust.to_vec(), des.to_vec());
+    assert_eq!(trust.into_vec(), des.into_vec());
 }
 
 #[test]
@@ -129,6 +124,5 @@ fn serde_3() {
     des.push_back(10);
 
     assert_eq!(trust.len(), des.len());
-    assert_eq!(trust, des);
-    assert_eq!(trust.to_vec(), des.to_vec());
+    assert_eq!(trust.into_vec(), des.into_vec());
 }
