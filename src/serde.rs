@@ -21,8 +21,7 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for TsilCev<T> {
     }
 }
 
-#[repr(transparent)]
-struct TsilCevVisitor<T>(phantom: PhantomData<T>)
+struct TsilCevVisitor<T>(PhantomData<T>);
 
 impl<'de, T: Deserialize<'de>> Visitor<'de> for TsilCevVisitor<T> {
     type Value = TsilCev<T>;
