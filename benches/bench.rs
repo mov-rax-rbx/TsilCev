@@ -125,12 +125,14 @@ const NUMS: &'static [Test] = &[
     Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
 ];
 
-const SAMPLE: [usize; 4] = [
-    NUMS.len() / 4,
-    NUMS.len() / 2,
-    3 * NUMS.len() / 4,
-    NUMS.len(),
-];
+// const SAMPLE: [usize; 4] = [
+//     NUMS.len() / 4,
+//     NUMS.len() / 2,
+//     3 * NUMS.len() / 4,
+//     NUMS.len(),
+// ];
+
+const SAMPLE: [usize; 1] = [NUMS.len()];
 
 fn pop_front(c: &mut Criterion) {
     let mut group = c.benchmark_group("pop_front");
@@ -155,6 +157,34 @@ fn pop_front(c: &mut Criterion) {
                 let mut ll = ll.clone();
                 for _ in 0..i {
                     ll.pop_front();
+                }
+            })
+        });
+    }
+
+    group.finish();
+}
+
+fn push_back(c: &mut Criterion) {
+    let mut group = c.benchmark_group("push_back");
+
+    for &i in SAMPLE.iter() {
+        let tc = TsilCev::new();
+        group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
+            b.iter(|| {
+                let mut tc = tc.clone();
+                for x in NUMS {
+                    tc.push_back(x);
+                }
+            })
+        });
+
+        let ll = LinkedList::new();
+        group.bench_function(BenchmarkId::new("LinkedList", i), |b| {
+            b.iter(|| {
+                let mut ll = ll.clone();
+                for x in NUMS {
+                    ll.push_back(x);
                 }
             })
         });
@@ -254,7 +284,7 @@ fn remove(c: &mut Criterion) {
     group.finish();
 }
 
-/*fn realoc_trigger_tsil_cev(c: &mut Criterion) {
+fn realoc_trigger_tsil_cev(c: &mut Criterion) {
     let mut tc = TsilCev::with_capacity(NUMS.len());
     for x in NUMS.iter() {
         tc.push_back(x.clone());
@@ -267,7 +297,7 @@ fn remove(c: &mut Criterion) {
             cursor.remove();
         }
     }));
-}*/
+}
 
 fn iter(c: &mut Criterion) {
     let mut group = c.benchmark_group("iterator");
@@ -306,7 +336,7 @@ fn iter(c: &mut Criterion) {
 }
 
 criterion_group!(
-    benches, pop_front, bench, remove, // realoc_trigger_tsil_cev,
+    benches, pop_front, push_back, bench, remove, realoc_trigger_tsil_cev,
     iter,
 );
 criterion_main!(benches);

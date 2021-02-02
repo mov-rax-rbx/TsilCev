@@ -808,9 +808,20 @@ impl<T> TsilCev<T> {
     /// assert_eq!(tc.into_vec(), &[0, 1, 2, 3]);
     /// ```
     pub fn pop_back(&mut self) -> Option<T> {
-        let end = self.end().to_option()?;
-        // safe because end is None or end < self.len
-        Some(unsafe { self.make_empty(end) }.0)
+        unsafe {
+            // safe because check
+            let end_idx = self.end().to_option()?;
+            let val = self.cev.as_ptr().add(end_idx);
+            self.connect((*val).prev, Index::None);
+            if end_idx + 1 != self.cev.len() {
+                self.swap_mem(end_idx, self.cev.len() - 1);
+                self.reconnect((*val).prev, (*val).next, Index(end_idx));
+            }
+            let ret = self.remove_last_mem().el;
+
+            self.try_decrease();
+            Some(ret)
+        }
     }
 
     /// Appends an element to the front (start) of a `TsilCev`
@@ -839,9 +850,20 @@ impl<T> TsilCev<T> {
     /// assert_eq!(tc.into_vec(), &[1, 2, 3, 4]);
     /// ```
     pub fn pop_front(&mut self) -> Option<T> {
-        let start = self.start().to_option()?;
-        // safe because start is None or start < self.len
-        Some(unsafe { self.make_empty(start) }.0)
+        unsafe {
+            // safe because check
+            let start_idx = self.start().to_option()?;
+            let val = self.cev.as_ptr().add(start_idx);
+            self.connect(Index::None, (*val).next);
+            if start_idx + 1 != self.cev.len() {
+                self.swap_mem(start_idx, self.cev.len() - 1);
+                self.reconnect((*val).prev, (*val).next, Index(start_idx));
+            }
+            let ret = self.remove_last_mem().el;
+
+            self.try_decrease();
+            Some(ret)
+        }
     }
 
     #[inline]
@@ -872,16 +894,16 @@ impl<T> TsilCev<T> {
                 self.end = Index::None;
             }
             (None, Some(y)) => {
-                self.cev.get_unchecked_mut(y).prev = Index::None;
+                (*self.cev.as_mut_ptr().add(y)).prev = Index::None;
                 self.start = Index(y);
             }
             (Some(x), None) => {
-                self.cev.get_unchecked_mut(x).next = Index::None;
+                (*self.cev.as_mut_ptr().add(x)).next = Index::None;
                 self.end = Index(x);
             }
             (Some(x), Some(y)) => {
-                self.cev.get_unchecked_mut(x).next = Index(y);
-                self.cev.get_unchecked_mut(y).prev = Index(x);
+                (*self.cev.as_mut_ptr().add(x)).next = Index(y);
+                (*self.cev.as_mut_ptr().add(y)).prev = Index(x);
             }
         };
     }
@@ -900,16 +922,16 @@ impl<T> TsilCev<T> {
                 self.end = Index(z);
             }
             (None, Some(z), Some(y)) => {
-                self.cev.get_unchecked_mut(y).prev = Index(z);
+                (*self.cev.as_mut_ptr().add(y)).prev = Index(z);
                 self.start = Index(z);
             }
             (Some(x), Some(z), None) => {
-                self.cev.get_unchecked_mut(x).next = Index(z);
+                (*self.cev.as_mut_ptr().add(x)).next = Index(z);
                 self.end = Index(z);
             }
             (Some(x), Some(z), Some(y)) => {
-                self.cev.get_unchecked_mut(x).next = Index(z);
-                self.cev.get_unchecked_mut(y).prev = Index(z);
+                (*self.cev.as_mut_ptr().add(x)).next = Index(z);
+                (*self.cev.as_mut_ptr().add(y)).prev = Index(z);
             }
             _ => unreachable!(),
         };
@@ -919,18 +941,16 @@ impl<T> TsilCev<T> {
     unsafe fn make_empty(&mut self, idx: usize) -> (T, Index) {
         debug_assert!(idx < self.cev.len() && !self.is_empty());
 
-        let prev = self.cev.get_unchecked(idx).prev;
-        let next = self.cev.get_unchecked(idx).next;
-        self.connect(prev, next);
+        let val = self.cev.as_ptr().add(idx);
+        let next = (*val).next;
+        self.connect((*val).prev, (*val).next);
         if idx + 1 != self.cev.len() {
             self.swap_mem(idx, self.cev.len() - 1);
-            let prev = self.cev.get_unchecked(idx).prev;
-            let next = self.cev.get_unchecked(idx).next;
-            self.reconnect(prev, next, Index(idx));
+            self.reconnect((*val).prev, (*val).next, Index(idx));
         }
         let ret = self.remove_last_mem().el;
 
-        self.try_realoc();
+        self.try_decrease();
         (
             ret,
             if next.0 == self.cev.len() {
@@ -942,25 +962,25 @@ impl<T> TsilCev<T> {
     }
 
     #[inline]
-    fn try_realoc(&mut self) {
-        let realoc_len = self.cev.capacity() >> 1;
+    fn try_decrease(&mut self) {
+        let new_capacity = self.cev.capacity() >> 1;
         // density balance if density < cev.len() / 4 then realocate for less capacity
-        if realoc_len > Self::MIN_REALOC_LEN && self.cev.len() <= realoc_len >> 1 {
-            // safe because cev.len < realoc_len, and 0 < realoc_len < cev.capacity
-            unsafe { self.realoc(realoc_len) }
+        if new_capacity > Self::MIN_REALOC_LEN && self.cev.len() <= new_capacity >> 1 {
+            // safe because cev.len < new_capacity, and 0 < new_capacity < cev.capacity
+            unsafe { self.decrease(new_capacity) }
         }
     }
 
     #[inline]
-    unsafe fn realoc(&mut self, realoc_len: usize) {
-        debug_assert!(self.len() <= realoc_len);
+    unsafe fn decrease(&mut self, new_capacity: usize) {
+        debug_assert!(self.len() <= new_capacity && new_capacity <= self.capacity());
 
         // safe because previous we do relax and all element
         // where index >= density is empty and in this empty
         // no reference
         let old_len = self.cev.len();
-        self.cev.set_len(realoc_len);
-        self.cev.shrink_to_fit(); //.shrink_to(realoc_len);
+        self.cev.set_len(new_capacity);
+        self.cev.shrink_to_fit(); //.shrink_to(new_capacity);
         self.cev.set_len(old_len);
     }
 
