@@ -60,6 +60,7 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::hash::{Hash, Hasher};
 use core::iter::{FromIterator, FusedIterator};
+use core::slice::{Iter, IterMut};
 
 // It should be Option<usize>, but in order to save
 // memory and avoid the NULL problem, a separate
@@ -241,10 +242,9 @@ impl<T> TsilCev<T> {
     /// assert_eq!(cev_iter.next(), None);
     /// ```
     #[inline]
-    pub const fn iter_cev(&self) -> CevIter<T> {
+    pub fn iter_cev(&self) -> CevIter<T> {
         CevIter {
-            tsil_cev: self,
-            pos: 0,
+            iter: self.cev.iter(),
         }
     }
 
@@ -265,8 +265,7 @@ impl<T> TsilCev<T> {
     #[inline]
     pub fn iter_cev_mut(&mut self) -> CevIterMut<T> {
         CevIterMut {
-            tsil_cev: self,
-            pos: 0,
+            iter: self.cev.iter_mut(),
         }
     }
 
@@ -2326,15 +2325,15 @@ impl<'t, T: 't> FusedIterator for CevIter<'t, T> {}
 impl<'t, T: 't> FusedIterator for CevIterMut<'t, T> {}
 impl<T> FusedIterator for TsilIntoIter<T> {}
 
+#[repr(transparent)]
 pub struct CevIterMut<'t, T: 't> {
-    tsil_cev: &'t mut TsilCev<T>,
-    pos: usize,
+    iter: IterMut<'t, Val<T>>,
 }
 
 #[derive(Clone)]
+#[repr(transparent)]
 pub struct CevIter<'t, T: 't> {
-    tsil_cev: &'t TsilCev<T>,
-    pos: usize,
+    iter: Iter<'t, Val<T>>,
 }
 
 impl<'t, T: 't> Iterator for CevIter<'t, T> {
@@ -2342,24 +2341,17 @@ impl<'t, T: 't> Iterator for CevIter<'t, T> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.pos < self.tsil_cev.len() {
-            let x = self.pos;
-            self.pos += 1;
-            // safe by previous check
-            return Some(unsafe { &self.tsil_cev.cev.get_unchecked(x).el });
-        }
-        None
+        Some(&self.iter.next()?.el)
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = self.tsil_cev.len() - self.pos;
-        (len, Some(len))
+        self.iter.size_hint()
     }
 
     #[inline]
-    fn last(self) -> Option<&'t T> {
-        self.tsil_cev.back()
+    fn last(mut self) -> Option<&'t T> {
+        Some(&self.iter.next_back()?.el)
     }
 }
 
@@ -2368,27 +2360,17 @@ impl<'t, T: 't> Iterator for CevIterMut<'t, T> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.pos < self.tsil_cev.len() {
-            let x = self.pos;
-            self.pos += 1;
-            // safe because Rust can't deduce that we won't return multiple references to the same value
-            // safe by previous check
-            return Some(unsafe {
-                &mut *(&mut self.tsil_cev.cev.get_unchecked_mut(x).el as *mut _)
-            });
-        }
-        None
+        Some(&mut self.iter.next()?.el)
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = self.tsil_cev.len() - self.pos;
-        (len, Some(len))
+        self.iter.size_hint()
     }
 
     #[inline]
-    fn last(self) -> Option<&'t mut T> {
-        self.tsil_cev.back_mut()
+    fn last(mut self) -> Option<&'t mut T> {
+        Some(&mut self.iter.next_back()?.el)
     }
 }
 

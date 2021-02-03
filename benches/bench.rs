@@ -310,21 +310,6 @@ fn into_vec(c: &mut Criterion) {
     group.finish();
 }
 
-fn vec_from(c: &mut Criterion) {
-    let mut group = c.benchmark_group("vec_from");
-
-    for &i in SAMPLE.iter() {
-        let vec = NUMS.to_vec();
-        group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
-            b.iter(|| {
-                let _ = TsilCev::from(vec.clone());
-            })
-        });
-    }
-
-    group.finish();
-}
-
 fn iter(c: &mut Criterion) {
     let mut group = c.benchmark_group("iterator");
 
@@ -363,11 +348,12 @@ fn iter(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    // pop_front, push_back,
-    // from_iter,
-    // bench, remove,
-    // into_vec,
-    vec_from,
-    // iter,
+    pop_front,
+    push_back,
+    from_iter,
+    bench,
+    remove,
+    into_vec,
+    iter,
 );
 criterion_main!(benches);
