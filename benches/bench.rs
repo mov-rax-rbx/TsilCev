@@ -1,9 +1,9 @@
-#![feature(linked_list_cursors)]
+#![feature(drain_filter)]
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::collections::LinkedList;
 use tsil_cev::TsilCev;
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 struct Test<'a> {
     f: f64,
     u: usize,
@@ -138,7 +138,7 @@ fn pop_front(c: &mut Criterion) {
     let mut group = c.benchmark_group("pop_front");
 
     for &i in SAMPLE.iter() {
-        let tc = TsilCev::from(NUMS);
+        let tc = TsilCev::from(&NUMS[..i]);
         group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
             b.iter(|| {
                 let mut tc = tc.clone();
@@ -193,6 +193,27 @@ fn push_back(c: &mut Criterion) {
     group.finish();
 }
 
+fn from_iter(c: &mut Criterion) {
+    use std::iter::FromIterator;
+    let mut group = c.benchmark_group("from_iter");
+
+    for &i in SAMPLE.iter() {
+        group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
+            b.iter(|| {
+                let _ = TsilCev::from_iter(NUMS);
+            })
+        });
+
+        group.bench_function(BenchmarkId::new("LinkedList", i), |b| {
+            b.iter(|| {
+                let _ = LinkedList::from_iter(NUMS);
+            })
+        });
+    }
+
+    group.finish();
+}
+
 fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("push_back() -> pop_back() -> push_front() -> pop_front()");
 
@@ -240,24 +261,18 @@ fn bench(c: &mut Criterion) {
 }
 
 fn remove(c: &mut Criterion) {
-    let mut group = c.benchmark_group("remove()");
+    let mut group = c.benchmark_group("drain_filter");
 
     for &i in SAMPLE.iter() {
-        let tc = TsilCev::from(NUMS);
-        let sp = i / 2;
-        let rem_size = i / 4;
+        let tc = TsilCev::from(&NUMS[..i]);
         group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
             b.iter(|| {
                 let mut tc = tc.clone();
-                let mut cursor = tc.cursor_idx_tsil_mut(sp);
                 let mut cnt = 0;
-                while let Some(_) = cursor.current() {
-                    cursor.remove();
+                tc.drain_filter_tsil(|x| {
                     cnt += 1;
-                    if cnt == rem_size {
-                        break;
-                    }
-                }
+                    cnt & 1 == 0
+                });
             })
         });
 
@@ -265,18 +280,14 @@ fn remove(c: &mut Criterion) {
         for x in NUMS.iter().take(i) {
             ll.push_back(x.clone());
         }
-        let sp = i / 2;
-        let rem_size = i / 4;
         group.bench_function(BenchmarkId::new("LinkedList", i), |b| {
             b.iter(|| {
                 let mut ll = ll.clone();
-                let mut cursor = ll.cursor_front_mut();
-                for _ in 0..sp {
-                    cursor.move_next();
-                }
-                for _ in 0..rem_size {
-                    cursor.remove_current();
-                }
+                let mut cnt = 0;
+                ll.drain_filter(|_| {
+                    cnt += 1;
+                    cnt & 1 == 0
+                });
             })
         });
     }
@@ -303,7 +314,7 @@ fn iter(c: &mut Criterion) {
     let mut group = c.benchmark_group("iterator");
 
     for &i in SAMPLE.iter() {
-        let mut tc = TsilCev::from(NUMS);
+        let mut tc = TsilCev::from(&NUMS[..i]);
         group.bench_function(BenchmarkId::new("TsilCev.iter_tsil_mut()", i), |b| {
             b.iter(|| {
                 for x in tc.iter_tsil_mut() {
@@ -336,7 +347,9 @@ fn iter(c: &mut Criterion) {
 }
 
 criterion_group!(
-    benches, pop_front, push_back, bench, remove, realoc_trigger_tsil_cev,
+    benches,
+    pop_front, push_back, from_iter,
+    bench, remove, realoc_trigger_tsil_cev,
     iter,
 );
 criterion_main!(benches);

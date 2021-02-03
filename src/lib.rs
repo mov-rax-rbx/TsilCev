@@ -2266,15 +2266,10 @@ impl<'t, T: 't> CursorMut<'t, T> {
     /// assert_eq!(tc.clone().into_vec(), &[1, 2]);
     /// ```
     pub fn owned(&mut self) -> Option<T> {
-        if !self.idx.is_none() {
-            // safe because after we do self.make_empty() and
-            // value is never read until a new value is added
-            let (ret, next_idx) = unsafe { self.tsil_cev.make_empty(self.idx.0) };
-            self.idx = next_idx;
-            Some(ret)
-        } else {
-            None
-        }
+        let idx = self.idx.to_option()?;
+        let (ret, next_idx) = unsafe { self.tsil_cev.make_empty(idx) };
+        self.idx = next_idx;
+        Some(ret)
     }
 
     /// Like `owned`, but don't return value.
@@ -2582,6 +2577,24 @@ impl<'t, T> IntoIterator for &'t mut TsilCev<T> {
     }
 }
 
+impl<T, F> Drop for DrainFilterTsil<'_, T, F>
+where
+    F: FnMut(&mut T) -> bool,
+{
+    fn drop(&mut self) {
+        self.for_each(drop)
+    }
+}
+
+impl<T, F> Drop for DrainFilterCev<'_, T, F>
+where
+    F: FnMut(&mut T) -> bool,
+{
+    fn drop(&mut self) {
+        self.for_each(drop)
+    }
+}
+
 impl<T> Extend<T> for TsilCev<T> {
     /// ```
     /// use tsil_cev::TsilCev;
@@ -2597,52 +2610,36 @@ impl<T> Extend<T> for TsilCev<T> {
     /// assert_eq!(tc.into_vec(), TsilCev::from(vec![0, 1, 2, 3, 4]).into_vec());
     /// ```
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        debug_assert!(Index(0usize.wrapping_sub(1)).is_none());
         // like
         // iter.into_iter().for_each(move |x| self.push_back(x));
 
-        let mut into_iter = iter.into_iter();
-        if self.cev.is_empty() {
-            if let Some(x) = into_iter.next() {
-                self.cev.reserve(into_iter.size_hint().0.saturating_add(1));
-                // safe because allocate size >= 1
-                unsafe {
-                    *self.cev.get_unchecked_mut(0) = Val {
-                        el: x,
-                        next: Index(1),
-                        prev: Index::None,
-                    };
-                    self.cev.set_len(1);
-                };
-                self.start = Index(0);
-                self.end = Index(0);
-            } else {
-                return;
-            }
-        }
         let old_len = self.cev.len();
         self.cev.extend(
-            into_iter
+            iter.into_iter()
                 .zip((old_len..).into_iter())
                 .map(move |(x, current_idx)| Val {
                     el: x,
                     next: Index(current_idx + 1),
-                    prev: Index(current_idx - 1),
+                    prev: Index(current_idx.wrapping_sub(1)),
                 }),
         );
         let new_len = self.cev.len();
         if new_len != old_len {
-            // not underflow because new_len >= 1
+            // not underflow because new_len > 0
             let last = new_len - 1;
             // safe because 0 <= last and old_len < self.cev.len
             unsafe {
                 self.cev.get_unchecked_mut(last).next = Index::None;
                 self.cev.get_unchecked_mut(old_len).prev = self.end;
-                // valid because old_lem >= 1
-                self.cev.get_unchecked_mut(self.end.0).next = Index(old_len);
+                if old_len > 0 {
+                    self.cev.get_unchecked_mut(self.end.0).next = Index(old_len);
+                }
+            }
+            if old_len == 0 {
+                self.start = Index(0);
             }
             self.end = Index(last);
-        } else {
-            unsafe { self.cev.get_unchecked_mut(0).next = Index::None };
         }
     }
 }
