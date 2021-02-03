@@ -269,7 +269,7 @@ fn remove(c: &mut Criterion) {
             b.iter(|| {
                 let mut tc = tc.clone();
                 let mut cnt = 0;
-                tc.drain_filter_tsil(|x| {
+                tc.drain_filter_tsil(|_| {
                     cnt += 1;
                     cnt & 1 == 0
                 });
@@ -295,19 +295,34 @@ fn remove(c: &mut Criterion) {
     group.finish();
 }
 
-fn realoc_trigger_tsil_cev(c: &mut Criterion) {
-    let mut tc = TsilCev::with_capacity(NUMS.len());
-    for x in NUMS.iter() {
-        tc.push_back(x.clone());
+fn into_vec(c: &mut Criterion) {
+    let mut group = c.benchmark_group("into_vec");
+
+    for &i in SAMPLE.iter() {
+        let tc = TsilCev::from(NUMS);
+        group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
+            b.iter(|| {
+                let _ = tc.clone().into_vec();
+            })
+        });
     }
-    let delete_size = 3 * NUMS.len() / 4 - 1;
-    c.bench_function("realoc trigger TsilCev", |b| b.iter(|| {
-        let mut tc = tc.clone();
-        let mut cursor = tc.cursor_front_mut();
-        for _ in 0..delete_size {
-            cursor.remove();
-        }
-    }));
+
+    group.finish();
+}
+
+fn vec_from(c: &mut Criterion) {
+    let mut group = c.benchmark_group("vec_from");
+
+    for &i in SAMPLE.iter() {
+        let vec = NUMS.to_vec();
+        group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
+            b.iter(|| {
+                let _ = TsilCev::from(vec.clone());
+            })
+        });
+    }
+
+    group.finish();
 }
 
 fn iter(c: &mut Criterion) {
@@ -348,8 +363,11 @@ fn iter(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    pop_front, push_back, from_iter,
-    bench, remove, realoc_trigger_tsil_cev,
-    iter,
+    // pop_front, push_back,
+    // from_iter,
+    // bench, remove,
+    // into_vec,
+    vec_from,
+    // iter,
 );
 criterion_main!(benches);

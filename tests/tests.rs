@@ -298,36 +298,6 @@ fn test_insert() {
 }
 
 #[test]
-fn test_remove_balance() {
-    let mut tc = TsilCev::with_capacity(64);
-    for i in 0..64 {
-        tc.push_back(i);
-    }
-
-    let mut cursor = tc.cursor_front_mut();
-    let mut cnt = 0;
-    while let Some(_) = cursor.current() {
-        cursor.remove();
-        cnt += 1;
-        if cnt == 50 {
-            break;
-        }
-    }
-    let etalon = (50..64).into_iter().map(|x| x).collect::<Vec<_>>();
-    assert_eq!(tc.len(), 14);
-    assert_eq!(tc.capacity(), 64 / 2);
-    assert_eq!(tc.clone().into_vec(), etalon);
-
-    let old_dencity = tc.len();
-    tc.pop_back();
-    tc.pop_back();
-    assert_eq!(tc.len(), old_dencity - 2);
-    tc.push_back(5);
-    tc.push_back(10);
-    assert_eq!(tc.len(), old_dencity);
-}
-
-#[test]
 fn test_clear() {
     let mut tc = TsilCev::with_capacity(64);
     for i in 0..64 {

@@ -2,10 +2,7 @@
 //! `O(1)` amortized insertion and removal time due to
 //! linear placement in memory. It is added in the
 //! same way as in `Vec`, but at deletion the element
-//! moves to the end and something like pop is called,
-//! and if the length equals `capacity / 4` then the `Vec`
-//! is reallocated and the `capacity == 2 * length`
-//! invariant is always executed.
+//! moves to the end and something like pop is called.
 
 //! # `tsil` and `cev`
 //! `TsilCev` has 2 types of iterators `Tsil` and `Cev`.
@@ -41,9 +38,8 @@
 //! # Current Implementation
 //! The allocator for the elements is `Vec` and each
 //! element has two indexes (next and previous element).
-//! Also if the number of elements is less than `capacity / 4`
-//! then it is reallocated to size `capacity / 2`. The time
-//! of addition and removal is amortized to `O(1)`.
+//! When delete an item, it moves to the end, and something
+//! like pop is called.
 
 //! ## Optional features
 //!
@@ -54,7 +50,6 @@
 
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
 
 #[cfg(feature = "serde")]
@@ -121,9 +116,6 @@ pub struct TsilCev<T> {
 }
 
 impl<T> TsilCev<T> {
-    // Minimum length at which there is a reduction in length
-    const MIN_REALOC_LEN: usize = 8;
-
     /// Constructs a new, empty `TsilCev` with the specified capacity
     /// like in `Vec`.
     /// ```
@@ -819,7 +811,6 @@ impl<T> TsilCev<T> {
             }
             let ret = self.remove_last_mem().el;
 
-            self.try_decrease();
             Some(ret)
         }
     }
@@ -861,7 +852,6 @@ impl<T> TsilCev<T> {
             }
             let ret = self.remove_last_mem().el;
 
-            self.try_decrease();
             Some(ret)
         }
     }
@@ -950,7 +940,6 @@ impl<T> TsilCev<T> {
         }
         let ret = self.remove_last_mem().el;
 
-        self.try_decrease();
         (
             ret,
             if next.0 == self.cev.len() {
@@ -959,29 +948,6 @@ impl<T> TsilCev<T> {
                 next
             },
         )
-    }
-
-    #[inline]
-    fn try_decrease(&mut self) {
-        let new_capacity = self.cev.capacity() >> 1;
-        // density balance if density < cev.len() / 4 then realocate for less capacity
-        if new_capacity > Self::MIN_REALOC_LEN && self.cev.len() <= new_capacity >> 1 {
-            // safe because cev.len < new_capacity, and 0 < new_capacity < cev.capacity
-            unsafe { self.decrease(new_capacity) }
-        }
-    }
-
-    #[inline]
-    unsafe fn decrease(&mut self, new_capacity: usize) {
-        debug_assert!(self.len() <= new_capacity && new_capacity <= self.capacity());
-
-        // safe because previous we do relax and all element
-        // where index >= density is empty and in this empty
-        // no reference
-        let old_len = self.cev.len();
-        self.cev.set_len(new_capacity);
-        self.cev.shrink_to_fit(); //.shrink_to(new_capacity);
-        self.cev.set_len(old_len);
     }
 
     #[inline]
@@ -1048,56 +1014,27 @@ impl<T: Clone> From<&[T]> for TsilCev<T> {
     /// assert_eq!(tc.into_vec(), &[0, 1, 2, 3, 4]);
     /// ```
     fn from(slice: &[T]) -> Self {
+        debug_assert!(Index(0usize.wrapping_sub(1)).is_none());
         if slice.is_empty() {
             Self::new()
-        } else if slice.len() == 1 {
-            Self {
-                cev: vec![Val {
-                    el: unsafe { slice.get_unchecked(0).clone() },
-                    next: Index::None,
-                    prev: Index::None,
-                }],
-                start: Index(0),
-                end: Index(0),
-            }
         } else {
-            let mut cev = Vec::with_capacity(slice.len());
-            // safe because after init
-            unsafe { cev.set_len(slice.len()) };
-            let mut tsil_cev = Self {
-                cev: cev,
-                start: Index(0),
-                end: Index(slice.len() - 1),
-            };
-            unsafe {
-                // safe because slice.len() > 1
-                *tsil_cev.cev.get_unchecked_mut(0) = Val {
-                    el: slice.get_unchecked(0).clone(),
-                    next: Index(1),
-                    prev: Index::None,
-                };
-
-                // safe because slice.len() > 1 and tsil_cev.end >= 1
-                *tsil_cev.cev.get_unchecked_mut(tsil_cev.end.0) = Val {
-                    el: slice.get_unchecked(tsil_cev.end.0).clone(),
-                    next: Index::None,
-                    prev: Index(tsil_cev.end.0 - 1),
-                };
-
-                // safe because slice.len() > 1 and tsil_cev.end >= 1
-                tsil_cev
-                    .cev
-                    .get_unchecked_mut(1..tsil_cev.end.0)
-                    .iter_mut()
-                    .zip(slice.get_unchecked(1..).iter().zip((1..).into_iter()))
-                    .for_each(|(x, (val, current_idx))| {
-                        *x = Val {
-                            el: val.clone(),
-                            next: Index(current_idx + 1),
-                            prev: Index(current_idx - 1),
-                        }
-                    });
-            }
+            let mut tsil_cev = TsilCev::with_capacity(slice.len());
+            unsafe { tsil_cev.cev.set_len(slice.len()) };
+            let last_idx = slice.len() - 1;
+            tsil_cev
+                .cev
+                .iter_mut()
+                .zip(slice.iter().zip((0..).into_iter()))
+                .for_each(|(x, (val, current_idx))| {
+                    *x = Val {
+                        el: val.clone(),
+                        next: Index(current_idx + 1),
+                        prev: Index(current_idx.wrapping_sub(1)),
+                    }
+                });
+            unsafe { tsil_cev.cev.get_unchecked_mut(last_idx).next = Index::None }
+            tsil_cev.start = Index(0);
+            tsil_cev.end = Index(last_idx);
             tsil_cev
         }
     }
@@ -1114,56 +1051,27 @@ impl<T> From<Vec<T>> for TsilCev<T> {
     /// assert_eq!(tc.into_vec(), &[0, 1, 2, 3, 4]);
     /// ```
     fn from(vec: Vec<T>) -> Self {
+        debug_assert!(Index(0usize.wrapping_sub(1)).is_none());
         if vec.is_empty() {
             Self::new()
-        } else if vec.len() == 1 {
-            Self {
-                cev: vec![Val {
-                    el: unsafe { core::ptr::read(vec.as_ptr()) },
-                    next: Index::None,
-                    prev: Index::None,
-                }],
-                start: Index(0),
-                end: Index(0),
-            }
         } else {
-            let mut cev = Vec::with_capacity(vec.len());
-            // safe because after init
-            unsafe { cev.set_len(vec.len()) };
-            let mut tsil_cev = Self {
-                cev: cev,
-                start: Index(0),
-                end: Index(vec.len() - 1),
-            };
-            unsafe {
-                // safe because vec.len() > 1
-                *tsil_cev.cev.get_unchecked_mut(0) = Val {
-                    el: core::ptr::read(vec.as_ptr()),
-                    next: Index(1),
-                    prev: Index::None,
-                };
-
-                // safe because vec.len() > 1 and tsil_cev.end >= 1
-                *tsil_cev.cev.get_unchecked_mut(tsil_cev.end.0) = Val {
-                    el: core::ptr::read(vec.as_ptr().add(tsil_cev.end.0)),
-                    next: Index::None,
-                    prev: Index(tsil_cev.end.0 - 1),
-                };
-
-                // safe because vec.len() > 1 and tsil_cev.end >= 1
-                tsil_cev
-                    .cev
-                    .get_unchecked_mut(1..tsil_cev.end.0)
-                    .iter_mut()
-                    .zip(vec.into_iter().skip(1).zip((1..).into_iter()))
-                    .for_each(|(x, (val, current_idx))| {
-                        *x = Val {
-                            el: val,
-                            next: Index(current_idx + 1),
-                            prev: Index(current_idx - 1),
-                        }
-                    });
-            }
+            let mut tsil_cev = TsilCev::with_capacity(vec.len());
+            unsafe { tsil_cev.cev.set_len(vec.len()) };
+            let last_idx = vec.len() - 1;
+            tsil_cev
+                .cev
+                .iter_mut()
+                .zip(vec.into_iter().zip((0..).into_iter()))
+                .for_each(move |(x, (val, current_idx))| {
+                    *x = Val {
+                        el: val,
+                        next: Index(current_idx + 1),
+                        prev: Index(current_idx.wrapping_sub(1)),
+                    }
+                });
+            unsafe { tsil_cev.cev.get_unchecked_mut(last_idx).next = Index::None }
+            tsil_cev.start = Index(0);
+            tsil_cev.end = Index(last_idx);
             tsil_cev
         }
     }
