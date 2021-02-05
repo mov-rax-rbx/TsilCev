@@ -5,7 +5,7 @@
 [![Crates](https://img.shields.io/crates/v/tsil_cev)](https://crates.io/crates/tsil_cev)
 [![Documentation](https://docs.rs/tsil_cev/badge.svg)](https://docs.rs/tsil_cev)
 
-`LinkedList` on `Vec`. Add and remove O(1) amortized. It has a similar interface to `LinkedList` and similar to `Vec`.
+`LinkedList` on `Vec`. Add and remove `O(1)` amortized. It has a similar interface to `LinkedList` and similar to `Vec`.
 
 ## Example
 

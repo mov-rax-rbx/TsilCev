@@ -3,6 +3,9 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::collections::LinkedList;
 use tsil_cev::TsilCev;
 
+#[macro_use]
+extern crate lazy_static;
+
 #[derive(Debug, Clone, PartialEq)]
 struct Test<'a> {
     f: f64,
@@ -27,118 +30,27 @@ impl<'a> Test<'a> {
     }
 }
 
-const NUMS: &'static [Test] = &[
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5), Test::new(9),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-    Test::new(9), Test::new(1), Test::new(5), Test::new(8), Test::new(9), Test::new(5),
-];
+const SIZE: usize = 570;
+lazy_static! {
+    static ref TEST_DATA: Vec<Test<'static>> = {
+        (0..SIZE).into_iter().map(|x| Test::new(x)).collect()
+    };
+}
 
-// const SAMPLE: [usize; 4] = [
-//     NUMS.len() / 4,
-//     NUMS.len() / 2,
-//     3 * NUMS.len() / 4,
-//     NUMS.len(),
+// static SAMPLE: [usize; 4] = [
+//     TEST_DATA.len() / 4,
+//     TEST_DATA.len() / 2,
+//     3 * TEST_DATA.len() / 4,
+//     TEST_DATA.len(),
 // ];
 
-const SAMPLE: [usize; 1] = [NUMS.len()];
+const SAMPLE: [usize; 1] = [SIZE];
 
 fn pop_front(c: &mut Criterion) {
     let mut group = c.benchmark_group("pop_front");
 
     for &i in SAMPLE.iter() {
-        let tc = TsilCev::from(&NUMS[..i]);
+        let tc = TsilCev::from(&TEST_DATA[..i]);
         group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
             b.iter(|| {
                 let mut tc = tc.clone();
@@ -149,7 +61,7 @@ fn pop_front(c: &mut Criterion) {
         });
 
         let mut ll = LinkedList::new();
-        for x in NUMS.iter().take(i) {
+        for x in TEST_DATA.iter().take(i) {
             ll.push_back(x.clone());
         }
         group.bench_function(BenchmarkId::new("LinkedList", i), |b| {
@@ -173,7 +85,7 @@ fn push_back(c: &mut Criterion) {
         group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
             b.iter(|| {
                 let mut tc = tc.clone();
-                for x in NUMS {
+                for x in TEST_DATA.iter() {
                     tc.push_back(x);
                 }
             })
@@ -183,7 +95,7 @@ fn push_back(c: &mut Criterion) {
         group.bench_function(BenchmarkId::new("LinkedList", i), |b| {
             b.iter(|| {
                 let mut ll = ll.clone();
-                for x in NUMS {
+                for x in TEST_DATA.iter() {
                     ll.push_back(x);
                 }
             })
@@ -200,13 +112,13 @@ fn from_iter(c: &mut Criterion) {
     for &i in SAMPLE.iter() {
         group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
             b.iter(|| {
-                let _ = TsilCev::from_iter(NUMS);
+                let _ = TsilCev::from_iter(TEST_DATA.iter());
             })
         });
 
         group.bench_function(BenchmarkId::new("LinkedList", i), |b| {
             b.iter(|| {
-                let _ = LinkedList::from_iter(NUMS);
+                let _ = LinkedList::from_iter(TEST_DATA.iter());
             })
         });
     }
@@ -218,20 +130,20 @@ fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("push_back() -> pop_back() -> push_front() -> pop_front()");
 
     for &i in SAMPLE.iter() {
-        let tc = TsilCev::with_capacity(NUMS.len());
+        let tc = TsilCev::with_capacity(TEST_DATA.len());
         group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
             b.iter(|| {
                 let mut tc = tc.clone();
-                for x in NUMS.iter().take(i / 2) {
+                for x in TEST_DATA.iter().take(i / 2) {
                     tc.push_back(x.clone());
                 }
-                for _ in NUMS.iter().take(i / 4) {
+                for _ in TEST_DATA.iter().take(i / 4) {
                     tc.pop_front();
                 }
-                for x in NUMS.iter().take(i / 2) {
+                for x in TEST_DATA.iter().take(i / 2) {
                     tc.push_front(x.clone());
                 }
-                for _ in NUMS.iter().take(i / 2) {
+                for _ in TEST_DATA.iter().take(i / 2) {
                     tc.pop_back();
                 }
             })
@@ -241,16 +153,16 @@ fn bench(c: &mut Criterion) {
         group.bench_function(BenchmarkId::new("LinkedList", i), |b| {
             b.iter(|| {
                 let mut ll = ll.clone();
-                for x in NUMS.iter().take(i / 2) {
+                for x in TEST_DATA.iter().take(i / 2) {
                     ll.push_back(x.clone());
                 }
-                for _ in NUMS.iter().take(i / 4) {
+                for _ in TEST_DATA.iter().take(i / 4) {
                     ll.pop_front();
                 }
-                for x in NUMS.iter().take(i / 2) {
+                for x in TEST_DATA.iter().take(i / 2) {
                     ll.push_front(x.clone());
                 }
-                for _ in NUMS.iter().take(i / 2) {
+                for _ in TEST_DATA.iter().take(i / 2) {
                     ll.pop_back();
                 }
             })
@@ -264,7 +176,7 @@ fn remove(c: &mut Criterion) {
     let mut group = c.benchmark_group("drain_filter");
 
     for &i in SAMPLE.iter() {
-        let tc = TsilCev::from(&NUMS[..i]);
+        let tc = TsilCev::from(&TEST_DATA[..i]);
         group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
             b.iter(|| {
                 let mut tc = tc.clone();
@@ -277,7 +189,7 @@ fn remove(c: &mut Criterion) {
         });
 
         let mut ll = LinkedList::new();
-        for x in NUMS.iter().take(i) {
+        for x in TEST_DATA.iter().take(i) {
             ll.push_back(x.clone());
         }
         group.bench_function(BenchmarkId::new("LinkedList", i), |b| {
@@ -299,7 +211,7 @@ fn into_vec(c: &mut Criterion) {
     let mut group = c.benchmark_group("into_vec");
 
     for &i in SAMPLE.iter() {
-        let tc = TsilCev::from(NUMS);
+        let tc = TsilCev::from(TEST_DATA.as_slice());
         group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
             b.iter(|| {
                 let _ = tc.clone().into_vec();
@@ -314,7 +226,7 @@ fn iter(c: &mut Criterion) {
     let mut group = c.benchmark_group("iterator");
 
     for &i in SAMPLE.iter() {
-        let mut tc = TsilCev::from(&NUMS[..i]);
+        let mut tc = TsilCev::from(&TEST_DATA[..i]);
         group.bench_function(BenchmarkId::new("TsilCev.iter_tsil_mut()", i), |b| {
             b.iter(|| {
                 for x in tc.iter_tsil_mut() {
@@ -331,7 +243,7 @@ fn iter(c: &mut Criterion) {
         });
 
         let mut ll = LinkedList::new();
-        for x in NUMS.iter().take(i) {
+        for x in TEST_DATA.iter().take(i) {
             ll.push_back(x.clone());
         }
         group.bench_function(BenchmarkId::new("LinkedList.iter_mut()", i), |b| {

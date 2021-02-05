@@ -24,3 +24,4 @@ serde = { version = "^1.0", optional = true, default-features = false }
 [dev-dependencies]
 serde_json = "^1.0"
 criterion = "^0.3.3"
+lazy_static = "^1.4.0"
