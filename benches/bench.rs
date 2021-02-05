@@ -33,7 +33,8 @@ impl<'a> Test<'a> {
 
 const SIZE: usize = 570;
 lazy_static! {
-    static ref TEST_DATA: Vec<Test<'static>> = (0..SIZE).into_iter().map(|x| Test::new(x)).collect();
+    static ref TEST_DATA: Vec<Test<'static>> =
+        (0..SIZE).into_iter().map(|x| Test::new(x)).collect();
 }
 
 // static SAMPLE: [usize; 4] = [
@@ -227,6 +228,41 @@ fn into_to_vec(c: &mut Criterion) {
     group.finish();
 }
 
+fn make_linked_list_order(c: &mut Criterion) {
+    let mut group = c.benchmark_group("make_linked_list_order");
+
+    for &i in SAMPLE.iter() {
+        let tc = TsilCev::from(TEST_DATA.as_slice());
+        group.bench_function(
+            BenchmarkId::new("make_linked_list_order for sequence", i),
+            |b| {
+                b.iter(|| {
+                    tc.clone().make_linked_list_order();
+                })
+            },
+        );
+
+        let mut tc = TsilCev::with_capacity(i);
+        for x in 0..i {
+            if x & 1 == 0 {
+                tc.push_back(TEST_DATA[x].clone());
+            } else {
+                tc.push_front(TEST_DATA[x].clone());
+            }
+        }
+        group.bench_function(
+            BenchmarkId::new("TsilCev push back, front, back, etc", i),
+            |b| {
+                b.iter(|| {
+                    tc.clone().make_linked_list_order();
+                })
+            },
+        );
+    }
+
+    group.finish();
+}
+
 fn iter(c: &mut Criterion) {
     let mut group = c.benchmark_group("iterator");
 
@@ -270,7 +306,8 @@ criterion_group!(
     // from_iter,
     // bench,
     // remove,
-    into_to_vec,
+    // into_to_vec,
+    make_linked_list_order,
     // iter,
 );
 criterion_main!(benches);

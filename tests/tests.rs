@@ -839,3 +839,110 @@ fn test_sort() {
     assert_eq!(tc.front(), Some(&0));
     assert_eq!(tc.back(), Some(&2));
 }
+
+#[test]
+fn test_make_linked_list_order() {
+    let mut tc = TsilCev::new();
+
+    tc.push_back(5);
+    tc.push_back(6);
+    tc.push_back(7);
+
+    tc.push_front(4);
+    tc.push_front(3);
+    tc.push_front(2);
+
+    tc.push_back(8);
+    tc.push_back(9);
+    tc.push_back(10);
+
+    tc.push_front(1);
+    tc.push_front(0);
+    tc.push_front(-1);
+
+    let clone_tc = tc.clone();
+    tc.make_linked_list_order();
+    assert_eq!(
+        tc.iter_cev().copied().collect::<Vec<_>>(),
+        clone_tc.to_vec()
+    );
+    assert_eq!(tc.front(), clone_tc.to_vec().first());
+    assert_eq!(tc.back(), clone_tc.to_vec().last());
+
+    tc.push_back(505);
+    tc.push_back(506);
+    tc.push_back(507);
+
+    tc.push_front(504);
+    tc.push_front(503);
+    tc.push_front(502);
+
+    tc.push_back(508);
+    tc.push_back(509);
+    tc.push_back(5010);
+
+    tc.push_front(501);
+    tc.push_front(500);
+    tc.push_front(-501);
+
+    let clone_tc = tc.clone();
+    tc.make_linked_list_order();
+    assert_eq!(
+        tc.iter_cev().copied().collect::<Vec<_>>(),
+        clone_tc.to_vec()
+    );
+    assert_eq!(tc.front(), clone_tc.to_vec().first());
+    assert_eq!(tc.back(), clone_tc.to_vec().last());
+
+    let etalon = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 8];
+    let mut tc = TsilCev::from(&etalon);
+
+    tc.make_linked_list_order();
+    assert_eq!(tc.iter_cev().copied().collect::<Vec<_>>(), etalon);
+    assert_eq!(tc.front(), etalon.first());
+    assert_eq!(tc.back(), etalon.last());
+
+    tc.push_front(-1);
+    let clone_tc = tc.clone();
+    tc.make_linked_list_order();
+    assert_eq!(
+        tc.iter_cev().copied().collect::<Vec<_>>(),
+        clone_tc.to_vec()
+    );
+    assert_eq!(tc.front(), clone_tc.to_vec().first());
+    assert_eq!(tc.back(), clone_tc.to_vec().last());
+
+    tc.push_front(-2);
+    tc.push_front(-3);
+    tc.push_back(9);
+    tc.push_back(10);
+    tc.push_back(11);
+    tc.push_front(-4);
+    tc.push_back(11);
+    tc.push_back(12);
+
+    let clone_tc = tc.clone();
+    tc.make_linked_list_order();
+    assert_eq!(
+        tc.iter_cev().copied().collect::<Vec<_>>(),
+        clone_tc.to_vec()
+    );
+    assert_eq!(tc.front(), clone_tc.to_vec().first());
+    assert_eq!(tc.back(), clone_tc.to_vec().last());
+
+    for x in 100..200 {
+        if x & 1 == 0 {
+            tc.push_back(x);
+        } else {
+            tc.push_front(-x);
+        }
+    }
+    let clone_tc = tc.clone();
+    tc.make_linked_list_order();
+    assert_eq!(
+        tc.iter_cev().copied().collect::<Vec<_>>(),
+        clone_tc.to_vec()
+    );
+    assert_eq!(tc.front(), clone_tc.to_vec().first());
+    assert_eq!(tc.back(), clone_tc.to_vec().last());
+}

@@ -60,6 +60,7 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::hash::{Hash, Hasher};
 use core::iter::{FromIterator, FusedIterator};
+use core::ptr::{read, swap};
 use core::slice::{Iter, IterMut};
 
 // It should be Option<usize>, but in order to save
@@ -599,8 +600,66 @@ impl<T> TsilCev<T> {
         res.iter_mut()
             .zip(self.iter_tsil())
             // safe because self move and droped
-            .for_each(|(dest, src)| *dest = unsafe { core::ptr::read(src as *const _) });
+            .for_each(|(dest, src)| *dest = unsafe { read(src as *const _) });
         res
+    }
+
+    /// Places elements inside `TsilCev` in the order
+    /// of `LinkedList` without using additional memory.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_front(3);
+    /// tc.push_front(2);
+    /// tc.push_front(1);
+    /// tc.push_back(4);
+    ///
+    /// tc.make_linked_list_order();
+    /// assert_eq!(tc.iter_cev().copied().collect::<Vec<_>>(), vec![1, 2, 3, 4]);
+    /// ```
+    pub fn make_linked_list_order(&mut self) {
+        debug_assert!(Index(0usize.wrapping_sub(1)).is_none());
+
+        if !self.is_empty() {
+            let start = self.cev.as_ptr();
+            let mut cev_val = self.cev.as_mut_ptr();
+
+            let end = unsafe { self.cev.as_mut_ptr().add(self.len() - 1) };
+            let mut tsil_val = unsafe { start.add(self.start().0) as *mut _ };
+
+            while cev_val != end {
+                unsafe {
+                    let cev_idx = cev_val.offset_from(start) as usize;
+                    if tsil_val != cev_val {
+                        let tsil_idx = Index(tsil_val.offset_from(start) as usize);
+                        if tsil_idx.0 == cev_idx {
+                            (*tsil_val).next = tsil_idx;
+                        } else {
+                            if let Some(val_prev_idx) = (*cev_val).prev.to_option() {
+                                self.cev.get_unchecked_mut(val_prev_idx).next = tsil_idx;
+                            }
+                            if let Some(val_next_idx) = (*cev_val).next.to_option() {
+                                self.cev.get_unchecked_mut(val_next_idx).prev = tsil_idx;
+                            }
+                        }
+                        swap(cev_val, tsil_val);
+                    }
+
+                    tsil_val = start.add((*cev_val).next.0) as *mut _;
+
+                    (*cev_val).prev = Index(cev_idx.wrapping_sub(1));
+                    (*cev_val).next = Index(cev_idx + 1);
+                    cev_val = cev_val.offset(1);
+                }
+            }
+
+            unsafe {
+                (*end).next = Index::None;
+                self.start = Index(0);
+                self.end = Index(end.offset_from(start) as usize);
+            }
+        }
     }
 
     /// Sorts the slice with a comparator function like in `Vec`.
@@ -967,7 +1026,7 @@ impl<T> TsilCev<T> {
 
         let x_val = self.cev.as_mut_ptr().add(x);
         let y_val = self.cev.as_mut_ptr().add(y);
-        core::ptr::swap(x_val, y_val);
+        swap(x_val, y_val);
     }
 
     #[inline]
@@ -977,7 +1036,7 @@ impl<T> TsilCev<T> {
         let last = self.cev.len() - 1;
         let last_val = self.cev.as_ptr().add(last);
         self.cev.set_len(last);
-        core::ptr::read(last_val)
+        read(last_val)
     }
 
     #[inline]
@@ -1052,6 +1111,7 @@ impl<T: Clone> From<&[T]> for TsilCev<T> {
     /// ```
     fn from(slice: &[T]) -> Self {
         debug_assert!(Index(0usize.wrapping_sub(1)).is_none());
+
         if slice.is_empty() {
             Self::new()
         } else {
@@ -1089,6 +1149,7 @@ impl<T> From<Vec<T>> for TsilCev<T> {
     /// ```
     fn from(vec: Vec<T>) -> Self {
         debug_assert!(Index(0usize.wrapping_sub(1)).is_none());
+
         if vec.is_empty() {
             Self::new()
         } else {
