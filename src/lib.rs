@@ -623,34 +623,34 @@ impl<T> TsilCev<T> {
 
         if !self.is_empty() {
             let start = self.cev.as_ptr();
-            let mut cev_val = self.cev.as_mut_ptr();
+            let mut cev_ptr = self.cev.as_mut_ptr();
 
             let end = unsafe { self.cev.as_mut_ptr().add(self.len() - 1) };
-            let mut tsil_val = unsafe { start.add(self.start().0) as *mut _ };
+            let mut tsil_ptr = unsafe { start.add(self.start().0) as *mut _ };
 
-            while cev_val != end {
+            while cev_ptr != end {
                 unsafe {
-                    let cev_idx = cev_val.offset_from(start) as usize;
-                    if tsil_val != cev_val {
-                        let tsil_idx = Index(tsil_val.offset_from(start) as usize);
-                        if tsil_idx.0 == cev_idx {
-                            (*tsil_val).next = tsil_idx;
+                    let cev_idx = cev_ptr.offset_from(start) as usize;
+                    if tsil_ptr != cev_ptr {
+                        let tsil_idx = Index(tsil_ptr.offset_from(start) as usize);
+                        if (*tsil_ptr).next.0 == cev_idx {
+                            (*tsil_ptr).next = tsil_idx;
                         } else {
-                            if let Some(val_prev_idx) = (*cev_val).prev.to_option() {
+                            if let Some(val_prev_idx) = (*cev_ptr).prev.to_option() {
                                 self.cev.get_unchecked_mut(val_prev_idx).next = tsil_idx;
                             }
-                            if let Some(val_next_idx) = (*cev_val).next.to_option() {
+                            if let Some(val_next_idx) = (*cev_ptr).next.to_option() {
                                 self.cev.get_unchecked_mut(val_next_idx).prev = tsil_idx;
                             }
                         }
-                        swap(cev_val, tsil_val);
+                        self.swap_mem(cev_idx, tsil_idx.0);
                     }
 
-                    tsil_val = start.add((*cev_val).next.0) as *mut _;
+                    tsil_ptr = start.add((*cev_ptr).next.0) as *mut _;
 
-                    (*cev_val).prev = Index(cev_idx.wrapping_sub(1));
-                    (*cev_val).next = Index(cev_idx + 1);
-                    cev_val = cev_val.offset(1);
+                    (*cev_ptr).prev = Index(cev_idx.wrapping_sub(1));
+                    (*cev_ptr).next = Index(cev_idx + 1);
+                    cev_ptr = cev_ptr.offset(1);
                 }
             }
 
@@ -1034,13 +1034,15 @@ impl<T> TsilCev<T> {
         debug_assert!(!self.cev.is_empty());
 
         let last = self.cev.len() - 1;
-        let last_val = self.cev.as_ptr().add(last);
         self.cev.set_len(last);
+        let last_val = self.cev.as_ptr().add(last);
         read(last_val)
     }
 
     #[inline]
     fn make_chain_cev(&mut self) {
+        debug_assert!(Index(0usize.wrapping_sub(1)).is_none());
+
         if self.len() == 1 {
             self.start = Index(0);
             self.end = Index(0);
@@ -1050,25 +1052,19 @@ impl<T> TsilCev<T> {
                 self.cev.get_unchecked_mut(0).next = Index::None;
             };
         } else if self.len() > 1 {
+            let last_idx = self.len() - 1;
+            self.cev
+                .iter_mut()
+                .zip((0..).into_iter())
+                .for_each(|(x, current_idx)| {
+                    x.next = Index(current_idx + 1);
+                    x.prev = Index(current_idx.wrapping_sub(1));
+                });
+
+            // safe because self.len > 1
+            unsafe { self.cev.get_unchecked_mut(last_idx).next = Index::None };
             self.start = Index(0);
             self.end = Index(self.len() - 1);
-            // safe because self.len > 1
-            unsafe {
-                self.cev.get_unchecked_mut(0).next = Index(1);
-                self.cev.get_unchecked_mut(0).prev = Index::None;
-
-                self.cev.get_unchecked_mut(self.end.0).next = Index::None;
-                self.cev.get_unchecked_mut(self.end.0).prev = Index(self.end.0 - 1);
-
-                self.cev
-                    .get_unchecked_mut(1..self.end.0)
-                    .iter_mut()
-                    .zip((1..).into_iter())
-                    .for_each(|(x, current_idx)| {
-                        x.next = Index(current_idx + 1);
-                        x.prev = Index(current_idx - 1);
-                    });
-            };
         }
     }
 }
@@ -1129,7 +1125,7 @@ impl<T: Clone> From<&[T]> for TsilCev<T> {
                         prev: Index(current_idx.wrapping_sub(1)),
                     }
                 });
-            unsafe { tsil_cev.cev.get_unchecked_mut(last_idx).next = Index::None }
+            unsafe { tsil_cev.cev.get_unchecked_mut(last_idx).next = Index::None };
             tsil_cev.start = Index(0);
             tsil_cev.end = Index(last_idx);
             tsil_cev
@@ -1167,7 +1163,7 @@ impl<T> From<Vec<T>> for TsilCev<T> {
                         prev: Index(current_idx.wrapping_sub(1)),
                     }
                 });
-            unsafe { tsil_cev.cev.get_unchecked_mut(last_idx).next = Index::None }
+            unsafe { tsil_cev.cev.get_unchecked_mut(last_idx).next = Index::None };
             tsil_cev.start = Index(0);
             tsil_cev.end = Index(last_idx);
             tsil_cev
