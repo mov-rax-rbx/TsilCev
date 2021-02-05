@@ -16,6 +16,7 @@ struct Test<'a> {
 const LINE: &'static str = "n.to_string()";
 
 impl<'a> Test<'a> {
+    #[inline]
     const fn new(n: usize) -> Self {
         Self {
             f: n as f64,
@@ -32,9 +33,7 @@ impl<'a> Test<'a> {
 
 const SIZE: usize = 570;
 lazy_static! {
-    static ref TEST_DATA: Vec<Test<'static>> = {
-        (0..SIZE).into_iter().map(|x| Test::new(x)).collect()
-    };
+    static ref TEST_DATA: Vec<Test<'static>> = (0..SIZE).into_iter().map(|x| Test::new(x)).collect();
 }
 
 // static SAMPLE: [usize; 4] = [
@@ -207,14 +206,20 @@ fn remove(c: &mut Criterion) {
     group.finish();
 }
 
-fn into_vec(c: &mut Criterion) {
-    let mut group = c.benchmark_group("into_vec");
+fn into_to_vec(c: &mut Criterion) {
+    let mut group = c.benchmark_group("into_to_vec");
 
     for &i in SAMPLE.iter() {
         let tc = TsilCev::from(TEST_DATA.as_slice());
-        group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
+        group.bench_function(BenchmarkId::new("TsilCev into_vec", i), |b| {
             b.iter(|| {
                 let _ = tc.clone().into_vec();
+            })
+        });
+
+        group.bench_function(BenchmarkId::new("TsilCev to_vec", i), |b| {
+            b.iter(|| {
+                let _ = tc.to_vec();
             })
         });
     }
@@ -260,12 +265,12 @@ fn iter(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    pop_front,
-    push_back,
-    from_iter,
-    bench,
-    remove,
-    into_vec,
-    iter,
+    // pop_front,
+    // push_back,
+    // from_iter,
+    // bench,
+    // remove,
+    into_to_vec,
+    // iter,
 );
 criterion_main!(benches);

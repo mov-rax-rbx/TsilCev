@@ -118,7 +118,7 @@ fn test_pop() {
 }
 
 #[test]
-fn test_tsil_iter_stil() {
+fn test_tsil_iter_tsil() {
     let mut tc = TsilCev::new();
     tc.push_back(500);
     tc.push_back(501);
@@ -138,6 +138,33 @@ fn test_tsil_iter_stil() {
     assert_eq!(tc.len(), etalon.len());
     assert_eq!(tc.front(), etalon.first());
     assert_eq!(tc.back(), etalon.last());
+
+    let etalon = vec![500, 501, 502, 503, 504, 505, 506, 507, 508, 509];
+    let tc = TsilCev::from(&etalon);
+
+    let mut etalon_iter = etalon.iter();
+    let mut tc_iter = tc.iter_tsil();
+
+    for _ in 0..etalon.len() / 2 {
+        assert_eq!(tc_iter.size_hint(), etalon_iter.size_hint());
+        assert_eq!(tc_iter.next(), etalon_iter.next());
+        assert_eq!(tc_iter.size_hint(), etalon_iter.size_hint());
+        assert_eq!(tc_iter.next_back(), etalon_iter.next_back());
+    }
+
+    let mut etalon = vec![500, 501, 502, 503, 504, 505, 506, 507, 508, 509];
+    let mut tc = TsilCev::from(&etalon);
+    let len = etalon.len() / 2;
+
+    let mut etalon_iter = etalon.iter_mut();
+    let mut tc_iter = tc.iter_tsil_mut();
+
+    for _ in 0..len {
+        assert_eq!(tc_iter.size_hint(), etalon_iter.size_hint());
+        assert_eq!(tc_iter.next(), etalon_iter.next());
+        assert_eq!(tc_iter.size_hint(), etalon_iter.size_hint());
+        assert_eq!(tc_iter.next_back(), etalon_iter.next_back());
+    }
 }
 
 #[test]
@@ -161,6 +188,33 @@ fn test_tsil_iter_cev() {
 
     assert_eq!(v, etalon);
     assert_eq!(tc.len(), etalon.len());
+
+    let etalon = vec![500, 501, 502, 503, 504, 505, 506, 507, 508, 509];
+    let tc = TsilCev::from(&etalon);
+
+    let mut etalon_iter = etalon.iter();
+    let mut tc_iter = tc.iter_cev();
+
+    for _ in 0..etalon.len() / 2 {
+        assert_eq!(tc_iter.size_hint(), etalon_iter.size_hint());
+        assert_eq!(tc_iter.next(), etalon_iter.next());
+        assert_eq!(tc_iter.size_hint(), etalon_iter.size_hint());
+        assert_eq!(tc_iter.next_back(), etalon_iter.next_back());
+    }
+
+    let mut etalon = vec![500, 501, 502, 503, 504, 505, 506, 507, 508, 509];
+    let mut tc = TsilCev::from(&etalon);
+    let len = etalon.len() / 2;
+
+    let mut etalon_iter = etalon.iter_mut();
+    let mut tc_iter = tc.iter_cev_mut();
+
+    for _ in 0..len {
+        assert_eq!(tc_iter.size_hint(), etalon_iter.size_hint());
+        assert_eq!(tc_iter.next(), etalon_iter.next());
+        assert_eq!(tc_iter.size_hint(), etalon_iter.size_hint());
+        assert_eq!(tc_iter.next_back(), etalon_iter.next_back());
+    }
 }
 
 #[test]

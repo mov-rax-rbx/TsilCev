@@ -201,8 +201,9 @@ impl<T> TsilCev<T> {
     #[inline]
     pub fn iter_tsil(&self) -> TsilIter<T> {
         TsilIter {
-            cursor: self.cursor_front(),
-            skips: 0,
+            start_cursor: self.cursor_front(),
+            end_cursor: self.cursor_back(),
+            feature_len: self.len(),
         }
     }
 
@@ -222,9 +223,16 @@ impl<T> TsilCev<T> {
     /// ```
     #[inline]
     pub fn iter_tsil_mut(&mut self) -> TsilIterMut<T> {
+        let len = self.len();
         TsilIterMut {
-            cursor: self.cursor_front_mut(),
-            skips: 0,
+            // safe because start_cursor and end_cursor no overlap
+            // and contains array index (if array realocate)
+            // and rust borrow checker will not allow the iterator
+            // to be used if an element (for example, the last element)
+            // has been deleted
+            start_cursor: unsafe { (&mut *(self as *mut TsilCev<T>)).cursor_front_mut() },
+            end_cursor: self.cursor_back_mut(),
+            feature_len: len,
         }
     }
 
@@ -301,10 +309,11 @@ impl<T> TsilCev<T> {
     where
         F: FnMut(&mut T) -> bool,
     {
+        let len = self.len();
         DrainFilterTsil {
             cursor: self.cursor_front_mut(),
             pred: pred,
-            skips: 0,
+            max_feature_len: len,
         }
     }
 
@@ -583,13 +592,15 @@ impl<T> TsilCev<T> {
     /// ```
     #[inline]
     pub fn into_vec(self) -> Vec<T> {
-        // like
-        // self.into_iter().map(move |x| x).collect::<Vec<_>>()
-
-        self.iter_tsil()
+        let mut res = Vec::with_capacity(self.len());
+        unsafe {
+            res.set_len(self.len());
+        }
+        res.iter_mut()
+            .zip(self.iter_tsil())
             // safe because self move and droped
-            .map(|x| unsafe { core::ptr::read(x as *const _) })
-            .collect::<Vec<_>>()
+            .for_each(|(dest, src)| *dest = unsafe { core::ptr::read(src as *const _) });
+        res
     }
 
     /// Sorts the slice with a comparator function like in `Vec`.
@@ -1000,6 +1011,32 @@ impl<T> TsilCev<T> {
                     });
             };
         }
+    }
+}
+
+impl<T: Clone> TsilCev<T> {
+    /// Copies `TsilCev` into a new `Vec` with `LinkedList` order.
+    /// ```
+    /// use tsil_cev::TsilCev;
+    ///
+    /// let mut tc = TsilCev::new();
+    /// tc.push_front(3);
+    /// tc.push_front(2);
+    /// tc.push_front(1);
+    /// tc.push_back(4);
+    ///
+    /// assert_eq!(tc.to_vec(), vec![1, 2, 3, 4]);
+    /// ```
+    #[inline]
+    pub fn to_vec(&self) -> Vec<T> {
+        let mut res = Vec::<T>::with_capacity(self.len());
+        unsafe {
+            res.set_len(self.len());
+        }
+        res.iter_mut()
+            .zip(self.iter_tsil())
+            .for_each(|(dest, src)| dest.clone_from(src));
+        res
     }
 }
 
@@ -2205,20 +2242,11 @@ impl<'t, T: 't> CursorMut<'t, T> {
     }
 }
 
-pub struct TsilIterMut<'t, T: 't> {
-    cursor: CursorMut<'t, T>,
-    skips: usize,
-}
-
 #[derive(Clone)]
 pub struct TsilIter<'t, T: 't> {
-    cursor: Cursor<'t, T>,
-    skips: usize,
-}
-
-#[derive(Clone)]
-pub struct TsilIntoIter<T> {
-    tsil_cev: TsilCev<T>,
+    start_cursor: Cursor<'t, T>,
+    end_cursor: Cursor<'t, T>,
+    feature_len: usize,
 }
 
 impl<'t, T: 't> Iterator for TsilIter<'t, T> {
@@ -2226,24 +2254,49 @@ impl<'t, T: 't> Iterator for TsilIter<'t, T> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        // safe because Rust can't deduce that we won't return multiple references to the same value
-        let x = Some(unsafe { &*(self.cursor.current()? as *const _) });
-        // safe by previous check
-        unsafe { self.cursor.move_next_unchecked() };
-        self.skips += 1;
-        x
+        if self.feature_len != 0 {
+            self.feature_len -= 1;
+            // safe because Rust can't deduce that we won't return multiple references to the same value
+            let x = Some(unsafe { &*(self.start_cursor.current_unchecked() as *const _) });
+            // self.feature_len != 0
+            unsafe { self.start_cursor.move_next_unchecked() };
+            x
+        } else {
+            None
+        }
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = self.cursor.tsil_cev.len() - self.skips;
-        (len, Some(len))
+        (self.feature_len, Some(self.feature_len))
     }
 
     #[inline]
-    fn last(self) -> Option<&'t T> {
-        self.cursor.tsil_cev.back()
+    fn last(mut self) -> Option<&'t T> {
+        self.next_back()
     }
+}
+
+impl<'t, T: 't> DoubleEndedIterator for TsilIter<'t, T> {
+    #[inline]
+    fn next_back(&mut self) -> Option<&'t T> {
+        if self.feature_len != 0 {
+            self.feature_len -= 1;
+            // safe because Rust can't deduce that we won't return multiple references to the same value
+            let x = Some(unsafe { &*(self.end_cursor.current_unchecked() as *const _) });
+            // self.feature_len != 0
+            unsafe { self.end_cursor.move_prev_unchecked() };
+            x
+        } else {
+            None
+        }
+    }
+}
+
+pub struct TsilIterMut<'t, T: 't> {
+    start_cursor: CursorMut<'t, T>,
+    end_cursor: CursorMut<'t, T>,
+    feature_len: usize,
 }
 
 impl<'t, T: 't> Iterator for TsilIterMut<'t, T> {
@@ -2251,24 +2304,48 @@ impl<'t, T: 't> Iterator for TsilIterMut<'t, T> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        // safe because Rust can't deduce that we won't return multiple references to the same value
-        let x = Some(unsafe { &mut *(self.cursor.current_mut()? as *mut _) });
-        // safe by previous check
-        unsafe { self.cursor.move_next_unchecked() };
-        self.skips += 1;
-        x
+        if self.feature_len != 0 {
+            self.feature_len -= 1;
+            // safe because Rust can't deduce that we won't return multiple references to the same value
+            let x = Some(unsafe { &mut *(self.start_cursor.current_unchecked_mut() as *mut _) });
+            // self.feature_len != 0
+            unsafe { self.start_cursor.move_next_unchecked() };
+            x
+        } else {
+            None
+        }
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = self.cursor.tsil_cev.len() - self.skips;
-        (len, Some(len))
+        (self.feature_len, Some(self.feature_len))
     }
 
     #[inline]
-    fn last(self) -> Option<&'t mut T> {
-        self.cursor.tsil_cev.back_mut()
+    fn last(mut self) -> Option<&'t mut T> {
+        self.next_back()
     }
+}
+
+impl<'t, T: 't> DoubleEndedIterator for TsilIterMut<'t, T> {
+    #[inline]
+    fn next_back(&mut self) -> Option<&'t mut T> {
+        if self.feature_len != 0 {
+            self.feature_len -= 1;
+            // safe because Rust can't deduce that we won't return multiple references to the same value
+            let x = Some(unsafe { &mut *(self.end_cursor.current_unchecked_mut() as *mut _) });
+            // self.feature_len != 0
+            unsafe { self.end_cursor.move_prev_unchecked() };
+            x
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct TsilIntoIter<T> {
+    tsil_cev: TsilCev<T>,
 }
 
 impl<T> Iterator for TsilIntoIter<T> {
@@ -2282,28 +2359,6 @@ impl<T> Iterator for TsilIntoIter<T> {
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         (self.tsil_cev.len(), Some(self.tsil_cev.len()))
-    }
-}
-
-impl<'t, T: 't> DoubleEndedIterator for TsilIter<'t, T> {
-    #[inline]
-    fn next_back(&mut self) -> Option<&'t T> {
-        // safe because Rust can't deduce that we won't return multiple references to the same value
-        let x = Some(unsafe { &*(self.cursor.current()? as *const _) });
-        // safe by previous check
-        unsafe { self.cursor.move_prev_unchecked() };
-        x
-    }
-}
-
-impl<'t, T: 't> DoubleEndedIterator for TsilIterMut<'t, T> {
-    #[inline]
-    fn next_back(&mut self) -> Option<&'t mut T> {
-        // safe because Rust can't deduce that we won't return multiple references to the same value
-        let x = Some(unsafe { &mut *(self.cursor.current_mut()? as *mut _) });
-        // safe by previous check
-        unsafe { self.cursor.move_prev_unchecked() };
-        x
     }
 }
 
@@ -2325,11 +2380,6 @@ impl<'t, T: 't> FusedIterator for TsilIterMut<'t, T> {}
 impl<'t, T: 't> FusedIterator for CevIter<'t, T> {}
 impl<'t, T: 't> FusedIterator for CevIterMut<'t, T> {}
 impl<T> FusedIterator for TsilIntoIter<T> {}
-
-#[repr(transparent)]
-pub struct CevIterMut<'t, T: 't> {
-    iter: IterMut<'t, Val<T>>,
-}
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -2356,6 +2406,18 @@ impl<'t, T: 't> Iterator for CevIter<'t, T> {
     }
 }
 
+impl<'t, T: 't> DoubleEndedIterator for CevIter<'t, T> {
+    #[inline]
+    fn next_back(&mut self) -> Option<&'t T> {
+        Some(&self.iter.next_back()?.el)
+    }
+}
+
+#[repr(transparent)]
+pub struct CevIterMut<'t, T: 't> {
+    iter: IterMut<'t, Val<T>>,
+}
+
 impl<'t, T: 't> Iterator for CevIterMut<'t, T> {
     type Item = &'t mut T;
 
@@ -2375,13 +2437,20 @@ impl<'t, T: 't> Iterator for CevIterMut<'t, T> {
     }
 }
 
+impl<'t, T: 't> DoubleEndedIterator for CevIterMut<'t, T> {
+    #[inline]
+    fn next_back(&mut self) -> Option<&'t mut T> {
+        Some(&mut self.iter.next_back()?.el)
+    }
+}
+
 pub struct DrainFilterTsil<'t, T: 't, F: 't>
 where
     F: FnMut(&mut T) -> bool,
 {
     cursor: CursorMut<'t, T>,
     pred: F,
-    skips: usize,
+    max_feature_len: usize,
 }
 
 impl<T, F> Iterator for DrainFilterTsil<'_, T, F>
@@ -2392,18 +2461,27 @@ where
 
     fn next(&mut self) -> Option<T> {
         while let Some(x) = self.cursor.current_mut() {
+            self.max_feature_len -= 1;
             if (self.pred)(x) {
                 return self.cursor.owned();
             }
             // safe by previous check
             unsafe { self.cursor.move_next_unchecked() };
-            self.skips += 1;
         }
         None
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (0, Some(self.cursor.tsil_cev.len() - self.skips))
+        (0, Some(self.max_feature_len))
+    }
+}
+
+impl<T, F> Drop for DrainFilterTsil<'_, T, F>
+where
+    F: FnMut(&mut T) -> bool,
+{
+    fn drop(&mut self) {
+        self.for_each(drop)
     }
 }
 
@@ -2438,6 +2516,15 @@ where
     }
 }
 
+impl<T, F> Drop for DrainFilterCev<'_, T, F>
+where
+    F: FnMut(&mut T) -> bool,
+{
+    fn drop(&mut self) {
+        self.for_each(drop)
+    }
+}
+
 impl<T> IntoIterator for TsilCev<T> {
     type Item = T;
     type IntoIter = TsilIntoIter<T>;
@@ -2468,24 +2555,6 @@ impl<'t, T> IntoIterator for &'t mut TsilCev<T> {
     }
 }
 
-impl<T, F> Drop for DrainFilterTsil<'_, T, F>
-where
-    F: FnMut(&mut T) -> bool,
-{
-    fn drop(&mut self) {
-        self.for_each(drop)
-    }
-}
-
-impl<T, F> Drop for DrainFilterCev<'_, T, F>
-where
-    F: FnMut(&mut T) -> bool,
-{
-    fn drop(&mut self) {
-        self.for_each(drop)
-    }
-}
-
 impl<T> Extend<T> for TsilCev<T> {
     /// ```
     /// use tsil_cev::TsilCev;
@@ -2506,15 +2575,16 @@ impl<T> Extend<T> for TsilCev<T> {
         // iter.into_iter().for_each(move |x| self.push_back(x));
 
         let old_len = self.cev.len();
-        self.cev.extend(
-            iter.into_iter()
-                .zip((old_len..).into_iter())
-                .map(move |(x, current_idx)| Val {
-                    el: x,
-                    next: Index(current_idx + 1),
-                    prev: Index(current_idx.wrapping_sub(1)),
-                }),
-        );
+        self.cev
+            .extend(
+                iter.into_iter()
+                    .zip((old_len..).into_iter())
+                    .map(move |(x, current_idx)| Val {
+                        el: x,
+                        next: Index(current_idx + 1),
+                        prev: Index(current_idx.wrapping_sub(1)),
+                    }),
+            );
         let new_len = self.cev.len();
         if new_len != old_len {
             // not underflow because new_len > 0
