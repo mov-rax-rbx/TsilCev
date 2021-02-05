@@ -76,7 +76,7 @@ impl<'de, T: Deserialize<'de>> Visitor<'de> for TsilCevVisitor<T> {
 
 #[test]
 fn serde_1() {
-    let mut trust = TsilCev::from(vec![0, 1, 2, 3, 4, 5]);
+    let mut trust = TsilCev::from([0, 1, 2, 3, 4, 5].to_vec());
 
     let ser = serde_json::to_string(&trust).unwrap();
     let mut des: TsilCev<i32> = serde_json::from_str(&ser).unwrap();
@@ -92,7 +92,7 @@ fn serde_1() {
 
 #[test]
 fn serde_2() {
-    let mut trust = TsilCev::from(vec![]);
+    let mut trust = TsilCev::from([].to_vec());
 
     let ser = serde_json::to_string(&trust).unwrap();
     let mut des: TsilCev<i32> = serde_json::from_str(&ser).unwrap();
@@ -108,7 +108,7 @@ fn serde_2() {
 
 #[test]
 fn serde_3() {
-    let mut trust = TsilCev::from(vec![0, 1, 2, 3, 4, 5]);
+    let mut trust = TsilCev::from([0, 1, 2, 3, 4, 5].to_vec());
     trust.pop_front();
     trust.pop_front();
     trust.pop_back();

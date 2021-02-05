@@ -581,6 +581,7 @@ impl<T> TsilCev<T> {
     ///
     /// assert_eq!(tc.into_vec(), vec![1, 2, 3, 4]);
     /// ```
+    #[inline]
     pub fn into_vec(self) -> Vec<T> {
         // like
         // self.into_iter().map(move |x| x).collect::<Vec<_>>()
