@@ -31,7 +31,7 @@
 //! cursor.move_prev();
 //! assert_eq!(cursor.current(), Some(&9));
 //!
-//! let _ = tc.drain_filter_tsil(|x| *x % 2 == 0).collect::<Vec<_>>();
+//! tc.drain_filter_tsil(|x| *x % 2 == 0);
 //! assert_eq!(tc.into_vec(), &[9]);
 //! ```
 
