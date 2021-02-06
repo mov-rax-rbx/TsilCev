@@ -42,7 +42,7 @@ lazy_static! {
     static ref TEST_DATA: Vec<Test<'static>> =
         (0..SIZE).into_iter().map(|x| Test::new(x)).collect();
     static ref SAMPLE: Vec<usize> =
-        (64..0).into_iter().filter(|x| SIZE >> x != 0).map(|x| SIZE >> x).collect();
+        (0..64).into_iter().rev().filter(|x| SIZE >> x != 0).map(|x| SIZE >> x).collect();
         // [SIZE].to_vec();
 }
 
