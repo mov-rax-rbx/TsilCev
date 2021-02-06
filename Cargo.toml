@@ -1,11 +1,12 @@
 [package]
 name = "tsil_cev"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["mov-rax-rbx"]
 license = "MIT"
 readme = "README.md"
 description = "LinkedList on Vec"
-repository = "https://github.com/mov-rax-rbx/TsilCev"
+repository = "https://github.com/mov-rax-rbx/TsilCev.git"
+homepage = "https://github.com/mov-rax-rbx/TsilCev"
 keywords = ["allocator", "no_std", "linked_list", "linear_memory"]
 categories = ["data-structures", "algorithms", "no-std"]
 edition = "2018"
