@@ -34,11 +34,19 @@ tc.drain_filter_tsil(|x| *x % 2 == 0);
 assert_eq!(tc.to_vec(), &[9]);
 ```
 
-# Comparison with `LinkedList` *(thank [Criterion](https://github.com/bheisler/criterion.rs))*
+# Comparison with `LinkedList` and `VecDeque` *(thank [Criterion](https://github.com/bheisler/criterion.rs))*
+
+![](img/from_iter.svg)
 
 ![](img/iter.svg)
+
 ![](img/pop_front.svg)
+
+![](img/push_back.svg)
+
+`VecDeque` use `swap_remove_back`
 ![](img/remove.svg)
+
 ![](img/seq_bench.svg)
 
 # Current Implementation
