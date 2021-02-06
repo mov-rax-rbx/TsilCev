@@ -1,6 +1,8 @@
 #![feature(drain_filter)]
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::collections::LinkedList;
+use std::collections::VecDeque;
+use std::iter::FromIterator;
 use tsil_cev::TsilCev;
 
 #[macro_use]
@@ -29,22 +31,20 @@ impl<'a> Test<'a> {
         self.f += 1.0;
         self.u += 1;
     }
+    #[inline]
+    fn get_val(&self) -> usize {
+        self.u
+    }
 }
 
-const SIZE: usize = 570;
+const SIZE: usize = 1 << 20;
 lazy_static! {
     static ref TEST_DATA: Vec<Test<'static>> =
         (0..SIZE).into_iter().map(|x| Test::new(x)).collect();
+    static ref SAMPLE: Vec<usize> =
+        (64..0).into_iter().filter(|x| SIZE >> x != 0).map(|x| SIZE >> x).collect();
+        // [SIZE].to_vec();
 }
-
-// static SAMPLE: [usize; 4] = [
-//     TEST_DATA.len() / 4,
-//     TEST_DATA.len() / 2,
-//     3 * TEST_DATA.len() / 4,
-//     TEST_DATA.len(),
-// ];
-
-const SAMPLE: [usize; 1] = [SIZE];
 
 fn pop_front(c: &mut Criterion) {
     let mut group = c.benchmark_group("pop_front");
@@ -56,6 +56,16 @@ fn pop_front(c: &mut Criterion) {
                 let mut tc = tc.clone();
                 for _ in 0..i {
                     tc.pop_front();
+                }
+            })
+        });
+
+        let dec = VecDeque::from_iter(TEST_DATA.iter().take(i).cloned());
+        group.bench_function(BenchmarkId::new("VecDeque", i), |b| {
+            b.iter(|| {
+                let mut dec = dec.clone();
+                for _ in 0..i {
+                    dec.pop_front();
                 }
             })
         });
@@ -85,8 +95,18 @@ fn push_back(c: &mut Criterion) {
         group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
             b.iter(|| {
                 let mut tc = tc.clone();
-                for x in TEST_DATA.iter() {
+                for x in TEST_DATA.iter().take(i) {
                     tc.push_back(x);
+                }
+            })
+        });
+
+        let dec = VecDeque::new();
+        group.bench_function(BenchmarkId::new("VecDeque", i), |b| {
+            b.iter(|| {
+                let mut dec = dec.clone();
+                for x in TEST_DATA.iter().take(i) {
+                    dec.push_back(x);
                 }
             })
         });
@@ -95,7 +115,7 @@ fn push_back(c: &mut Criterion) {
         group.bench_function(BenchmarkId::new("LinkedList", i), |b| {
             b.iter(|| {
                 let mut ll = ll.clone();
-                for x in TEST_DATA.iter() {
+                for x in TEST_DATA.iter().take(i) {
                     ll.push_back(x);
                 }
             })
@@ -106,19 +126,24 @@ fn push_back(c: &mut Criterion) {
 }
 
 fn from_iter(c: &mut Criterion) {
-    use std::iter::FromIterator;
     let mut group = c.benchmark_group("from_iter");
 
     for &i in SAMPLE.iter() {
         group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
             b.iter(|| {
-                let _ = TsilCev::from_iter(TEST_DATA.iter());
+                let _ = TsilCev::from_iter(TEST_DATA.iter().take(i).cloned());
+            })
+        });
+
+        group.bench_function(BenchmarkId::new("VecDeque", i), |b| {
+            b.iter(|| {
+                let _ = VecDeque::from_iter(TEST_DATA.iter().take(i).cloned());
             })
         });
 
         group.bench_function(BenchmarkId::new("LinkedList", i), |b| {
             b.iter(|| {
-                let _ = LinkedList::from_iter(TEST_DATA.iter());
+                let _ = LinkedList::from_iter(TEST_DATA.iter().take(i).cloned());
             })
         });
     }
@@ -130,7 +155,7 @@ fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("push_back() -> pop_back() -> push_front() -> pop_front()");
 
     for &i in SAMPLE.iter() {
-        let tc = TsilCev::with_capacity(TEST_DATA.len());
+        let tc = TsilCev::with_capacity(i);
         group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
             b.iter(|| {
                 let mut tc = tc.clone();
@@ -145,6 +170,25 @@ fn bench(c: &mut Criterion) {
                 }
                 for _ in TEST_DATA.iter().take(i / 2) {
                     tc.pop_back();
+                }
+            })
+        });
+
+        let dec = VecDeque::with_capacity(i);
+        group.bench_function(BenchmarkId::new("VecDeque", i), |b| {
+            b.iter(|| {
+                let mut dec = dec.clone();
+                for x in TEST_DATA.iter().take(i / 2) {
+                    dec.push_back(x.clone());
+                }
+                for _ in TEST_DATA.iter().take(i / 4) {
+                    dec.pop_front();
+                }
+                for x in TEST_DATA.iter().take(i / 2) {
+                    dec.push_front(x.clone());
+                }
+                for _ in TEST_DATA.iter().take(i / 2) {
+                    dec.pop_back();
                 }
             })
         });
@@ -179,23 +223,31 @@ fn remove(c: &mut Criterion) {
         let tc = TsilCev::from(&TEST_DATA[..i]);
         group.bench_function(BenchmarkId::new("TsilCev LinkedList order", i), |b| {
             b.iter(|| {
-                let mut tc = tc.clone();
-                let mut cnt = 0;
-                tc.drain_filter_tsil(|_| {
-                    cnt += 1;
-                    cnt & 1 == 0
-                });
+                tc.clone().drain_filter_tsil(|x| x.get_val() & 1 == 0);
             })
         });
 
         group.bench_function(BenchmarkId::new("TsilCev Vec order", i), |b| {
             b.iter(|| {
-                let mut tc = tc.clone();
-                let mut cnt = 0;
-                tc.drain_filter_cev(|_| {
-                    cnt += 1;
-                    cnt & 1 == 0
-                });
+                tc.clone().drain_filter_cev(|x| x.get_val() & 1 == 0);
+            })
+        });
+
+        let dec = VecDeque::from_iter(TEST_DATA.iter().take(i).cloned());
+        group.bench_function(BenchmarkId::new("VecDeque swap_remove_back", i), |b| {
+            b.iter(|| {
+                let mut dec = dec.clone();
+                let mut x = 0;
+                let mut end = i;
+                while x < end {
+                    let val = &dec[x];
+                    if val.get_val() & 1 == 0 {
+                        dec.swap_remove_back(x);
+                        end -= 1;
+                        continue;
+                    }
+                    x += 1;
+                }
             })
         });
 
@@ -206,69 +258,9 @@ fn remove(c: &mut Criterion) {
         group.bench_function(BenchmarkId::new("LinkedList", i), |b| {
             b.iter(|| {
                 let mut ll = ll.clone();
-                let mut cnt = 0;
-                ll.drain_filter(|_| {
-                    cnt += 1;
-                    cnt & 1 == 0
-                });
+                ll.drain_filter(|x| x.get_val() & 1 == 0);
             })
         });
-    }
-
-    group.finish();
-}
-
-fn into_to_vec(c: &mut Criterion) {
-    let mut group = c.benchmark_group("into_to_vec");
-
-    for &i in SAMPLE.iter() {
-        let tc = TsilCev::from(TEST_DATA.as_slice());
-        group.bench_function(BenchmarkId::new("TsilCev into_vec", i), |b| {
-            b.iter(|| {
-                let _ = tc.clone().into_vec();
-            })
-        });
-
-        group.bench_function(BenchmarkId::new("TsilCev to_vec", i), |b| {
-            b.iter(|| {
-                let _ = tc.to_vec();
-            })
-        });
-    }
-
-    group.finish();
-}
-
-fn make_linked_list_order(c: &mut Criterion) {
-    let mut group = c.benchmark_group("make_linked_list_order");
-
-    for &i in SAMPLE.iter() {
-        let tc = TsilCev::from(TEST_DATA.as_slice());
-        group.bench_function(
-            BenchmarkId::new("make_linked_list_order for sequence", i),
-            |b| {
-                b.iter(|| {
-                    tc.clone().make_linked_list_order();
-                })
-            },
-        );
-
-        let mut tc = TsilCev::with_capacity(i);
-        for x in 0..i {
-            if x & 1 == 0 {
-                tc.push_back(TEST_DATA[x].clone());
-            } else {
-                tc.push_front(TEST_DATA[x].clone());
-            }
-        }
-        group.bench_function(
-            BenchmarkId::new("TsilCev push back, front, back, etc", i),
-            |b| {
-                b.iter(|| {
-                    tc.clone().make_linked_list_order();
-                })
-            },
-        );
     }
 
     group.finish();
@@ -294,6 +286,15 @@ fn iter(c: &mut Criterion) {
             })
         });
 
+        let mut dec = VecDeque::from_iter(TEST_DATA.iter().take(i).cloned());
+        group.bench_function(BenchmarkId::new("VecDeque", i), |b| {
+            b.iter(|| {
+                for x in dec.iter_mut() {
+                    x.add_one();
+                }
+            })
+        });
+
         let mut ll = LinkedList::new();
         for x in TEST_DATA.iter().take(i) {
             ll.push_back(x.clone());
@@ -310,14 +311,5 @@ fn iter(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(
-    benches, pop_front,
-    // push_back,
-    // from_iter,
-    // bench,
-    remove,
-    // into_to_vec,
-    // make_linked_list_order,
-    // iter,
-);
+criterion_group!(benches, pop_front, push_back, from_iter, bench, remove, iter,);
 criterion_main!(benches);
