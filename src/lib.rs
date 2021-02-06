@@ -352,10 +352,13 @@ impl<T> TsilCev<T> {
     where
         F: FnMut(&mut T) -> bool,
     {
+        let len = self.len();
+        let current_ptr = self.cev.as_mut_ptr();
         DrainFilterCev {
             tsil_cev: self,
+            current_ptr: current_ptr,
             pred: pred,
-            skips: 0,
+            max_feature_len: len,
         }
     }
 
@@ -643,7 +646,7 @@ impl<T> TsilCev<T> {
                                 self.cev.get_unchecked_mut(val_next_idx).prev = tsil_idx;
                             }
                         }
-                        self.swap_mem(cev_idx, tsil_idx.0);
+                        swap(cev_ptr, tsil_ptr);
                     }
 
                     tsil_ptr = start.add((*cev_ptr).next.0) as *mut _;
@@ -669,11 +672,11 @@ impl<T> TsilCev<T> {
     ///
     /// let mut tc = TsilCev::from(vec![5, 4, 1, 3, 2]);
     /// tc.sort_by(|a, b| a.cmp(b));
-    /// assert_eq!(tc.clone().into_vec(), &[1, 2, 3, 4, 5]);
+    /// assert_eq!(tc.to_vec(), &[1, 2, 3, 4, 5]);
     ///
     /// // reverse sorting
     /// tc.sort_by(|a, b| b.cmp(a));
-    /// assert_eq!(tc.clone().into_vec(), &[5, 4, 3, 2, 1]);
+    /// assert_eq!(tc.to_vec(), &[5, 4, 3, 2, 1]);
     /// ```
     pub fn sort_by(&mut self, mut cmp: impl FnMut(&T, &T) -> Ordering) {
         self.cev.sort_by(|x, y| cmp(&x.el, &y.el));
@@ -689,7 +692,7 @@ impl<T> TsilCev<T> {
     /// let mut tc = TsilCev::from(vec![-5i32, 4, 1, -3, 2]);
     ///
     /// tc.sort_by_key(|k| k.abs());
-    /// assert_eq!(tc.clone().into_vec(), &[1, 2, -3, 4, -5]);
+    /// assert_eq!(tc.to_vec(), &[1, 2, -3, 4, -5]);
     /// ```
     pub fn sort_by_key<K: Ord>(&mut self, mut f: impl FnMut(&T) -> K) {
         self.cev.sort_by_key(|x| f(&x.el));
@@ -704,7 +707,7 @@ impl<T> TsilCev<T> {
     /// let mut tc = TsilCev::from(vec![-5i32, 4, 32, -3, 2]);
     ///
     /// tc.sort_by_cached_key(|k| k.to_string());
-    /// assert_eq!(tc.clone().into_vec(), &[-3, -5, 2, 32, 4]);
+    /// assert_eq!(tc.to_vec(), &[-3, -5, 2, 32, 4]);
     /// ```
     pub fn sort_by_cached_key<K: Ord>(&mut self, mut f: impl FnMut(&T) -> K) {
         self.cev.sort_by_cached_key(|x| f(&x.el));
@@ -720,11 +723,11 @@ impl<T> TsilCev<T> {
     ///
     /// let mut tc = TsilCev::from(vec![5, 4, 1, 3, 2]);
     /// tc.sort_unstable_by(|a, b| a.cmp(b));
-    /// assert_eq!(tc.clone().into_vec(), &[1, 2, 3, 4, 5]);
+    /// assert_eq!(tc.to_vec(), &[1, 2, 3, 4, 5]);
     ///
     /// // reverse sorting
     /// tc.sort_unstable_by(|a, b| b.cmp(a));
-    /// assert_eq!(tc.clone().into_vec(), &[5, 4, 3, 2, 1]);
+    /// assert_eq!(tc.to_vec(), &[5, 4, 3, 2, 1]);
     /// ```
     pub fn sort_unstable_by(&mut self, mut cmp: impl FnMut(&T, &T) -> Ordering) {
         self.cev.sort_unstable_by(|x, y| cmp(&x.el, &y.el));
@@ -742,7 +745,7 @@ impl<T> TsilCev<T> {
     /// let mut tc = TsilCev::from(vec![-5i32, 4, 1, -3, 2]);
     ///
     /// tc.sort_unstable_by_key(|k| k.abs());
-    /// assert_eq!(tc.clone().into_vec(), &[1, 2, -3, 4, -5]);
+    /// assert_eq!(tc.to_vec(), &[1, 2, -3, 4, -5]);
     /// ```
     pub fn sort_unstable_by_key<K: Ord>(&mut self, mut f: impl FnMut(&T) -> K) {
         self.cev.sort_unstable_by_key(|x| f(&x.el));
@@ -871,17 +874,19 @@ impl<T> TsilCev<T> {
     /// ```
     pub fn pop_back(&mut self) -> Option<T> {
         unsafe {
-            // safe because check
             let end_idx = self.end().to_option()?;
-            let val = self.cev.as_ptr().add(end_idx);
-            self.connect((*val).prev, Index::None);
-            if end_idx + 1 != self.cev.len() {
-                self.swap_mem(end_idx, self.cev.len() - 1);
-                self.reconnect((*val).prev, (*val).next, Index(end_idx));
-            }
-            let ret = self.remove_last_mem().el;
+            let last_idx = self.cev.len() - 1;
 
-            Some(ret)
+            let end = self.cev.as_mut_ptr().add(end_idx);
+            let last = self.cev.as_mut_ptr().add(last_idx);
+
+            self.connect((*end).prev, Index::None);
+            if end != last {
+                swap(end, last);
+                self.reconnect((*end).prev, (*end).next, Index(end_idx));
+            }
+            self.cev.set_len(last_idx);
+            Some(read(last).el)
         }
     }
 
@@ -912,17 +917,19 @@ impl<T> TsilCev<T> {
     /// ```
     pub fn pop_front(&mut self) -> Option<T> {
         unsafe {
-            // safe because check
             let start_idx = self.start().to_option()?;
-            let val = self.cev.as_ptr().add(start_idx);
-            self.connect(Index::None, (*val).next);
-            if start_idx + 1 != self.cev.len() {
-                self.swap_mem(start_idx, self.cev.len() - 1);
-                self.reconnect((*val).prev, (*val).next, Index(start_idx));
-            }
-            let ret = self.remove_last_mem().el;
+            let last_idx = self.cev.len() - 1;
 
-            Some(ret)
+            let start = self.cev.as_mut_ptr().add(start_idx);
+            let last = self.cev.as_mut_ptr().add(last_idx);
+
+            self.connect(Index::None, (*start).next);
+            if start != last {
+                swap(start, last);
+                self.reconnect((*start).prev, (*start).next, Index(start_idx));
+            }
+            self.cev.set_len(last_idx);
+            Some(read(last).el)
         }
     }
 
@@ -1001,42 +1008,40 @@ impl<T> TsilCev<T> {
     unsafe fn make_empty(&mut self, idx: usize) -> (T, Index) {
         debug_assert!(idx < self.cev.len() && !self.is_empty());
 
-        let val = self.cev.as_ptr().add(idx);
+        let last_idx = self.cev.len() - 1;
+        let last = self.cev.as_mut_ptr().add(last_idx);
+        let val = self.cev.as_mut_ptr().add(idx);
+
         let next = (*val).next;
         self.connect((*val).prev, (*val).next);
-        if idx + 1 != self.cev.len() {
-            self.swap_mem(idx, self.cev.len() - 1);
+        if idx != last_idx {
+            swap(val, last);
             self.reconnect((*val).prev, (*val).next, Index(idx));
         }
-        let ret = self.remove_last_mem().el;
+        self.cev.set_len(last_idx);
+        let ret = read(last).el;
 
-        (
-            ret,
-            if next.0 == self.cev.len() {
-                Index(idx)
-            } else {
-                next
-            },
-        )
+        (ret, if next.0 == last_idx { Index(idx) } else { next })
     }
 
     #[inline]
-    unsafe fn swap_mem(&mut self, x: usize, y: usize) {
-        debug_assert!(x < self.cev.len() && y < self.cev.len());
+    unsafe fn make_empty_ptr(&mut self, val: *mut Val<T>) -> (T, Index) {
+        debug_assert!(!val.is_null() && val < self.cev.as_mut_ptr().add(self.cev.len()));
 
-        let x_val = self.cev.as_mut_ptr().add(x);
-        let y_val = self.cev.as_mut_ptr().add(y);
-        swap(x_val, y_val);
-    }
+        let last_idx = self.cev.len() - 1;
+        let last = self.cev.as_mut_ptr().add(last_idx);
 
-    #[inline]
-    unsafe fn remove_last_mem(&mut self) -> Val<T> {
-        debug_assert!(!self.cev.is_empty());
+        let next = (*val).next;
+        let index = Index(val.offset_from(self.cev.as_ptr()) as usize);
+        self.connect((*val).prev, (*val).next);
+        if val != last {
+            swap(val, last);
+            self.reconnect((*val).prev, (*val).next, index);
+        }
+        self.cev.set_len(last_idx);
+        let ret = read(last).el;
 
-        let last = self.cev.len() - 1;
-        self.cev.set_len(last);
-        let last_val = self.cev.as_ptr().add(last);
-        read(last_val)
+        (ret, if next.0 == last_idx { index } else { next })
     }
 
     #[inline]
@@ -1501,7 +1506,7 @@ impl<'t, T: 't> Cursor<'t, T> {
     /// ```
     #[inline]
     pub fn move_next_length(&mut self, mut len: usize) -> &mut Self {
-        while !self.idx.is_none() && len > 0 {
+        while !self.idx.is_none() && len != 0 {
             // safe because by previous check and self.idx traversal on tsil_cev
             self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).next };
             len -= 1;
@@ -1530,7 +1535,7 @@ impl<'t, T: 't> Cursor<'t, T> {
     /// ```
     #[inline]
     pub fn move_prev_length(&mut self, mut len: usize) -> &mut Self {
-        while !self.idx.is_none() && len > 0 {
+        while !self.idx.is_none() && len != 0 {
             // safe because by previous check and self.idx traversal on tsil_cev
             self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).prev };
             len -= 1;
@@ -1997,7 +2002,7 @@ impl<'t, T: 't> CursorMut<'t, T> {
     /// ```
     #[inline]
     pub fn move_next_length(&mut self, mut len: usize) -> &mut Self {
-        while !self.idx.is_none() && len > 0 {
+        while !self.idx.is_none() && len != 0 {
             // safe because by previous check and self.idx traversal on tsil_cev
             self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).next };
             len -= 1;
@@ -2026,7 +2031,7 @@ impl<'t, T: 't> CursorMut<'t, T> {
     /// ```
     #[inline]
     pub fn move_prev_length(&mut self, mut len: usize) -> &mut Self {
-        while !self.idx.is_none() && len > 0 {
+        while !self.idx.is_none() && len != 0 {
             // safe because by previous check and self.idx traversal on tsil_cev
             self.idx = unsafe { self.tsil_cev.cev.get_unchecked(self.idx.0).prev };
             len -= 1;
@@ -2194,15 +2199,15 @@ impl<'t, T: 't> CursorMut<'t, T> {
     ///
     /// let cursor = tc.cursor_front_mut().insert_before(-1).finish();
     /// assert_eq!(cursor.current(), Some(&0));
-    /// assert_eq!(tc.clone().into_vec(), &[-1, 0, 1, 2, 3, 4]);
+    /// assert_eq!(tc.to_vec(), &[-1, 0, 1, 2, 3, 4]);
     ///
     /// let cursor = tc.cursor_front_mut().move_next_length(3).insert_before(20).finish();
     /// assert_eq!(cursor.current(), Some(&2));
-    /// assert_eq!(tc.clone().into_vec(), &[-1, 0, 1, 20, 2, 3, 4]);
+    /// assert_eq!(tc.to_vec(), &[-1, 0, 1, 20, 2, 3, 4]);
     ///
     /// let cursor = tc.cursor_front_mut().move_prev().insert_before(100).finish();
     /// assert_eq!(cursor.current(), None);
-    /// assert_eq!(tc.clone().into_vec(), &[-1, 0, 1, 20, 2, 3, 4, 100]);
+    /// assert_eq!(tc.to_vec(), &[-1, 0, 1, 20, 2, 3, 4, 100]);
     /// ```
     pub fn insert_before(&mut self, val: T) -> &mut Self {
         if !self.idx.is_none() {
@@ -2224,15 +2229,15 @@ impl<'t, T: 't> CursorMut<'t, T> {
     ///
     /// let cursor = tc.cursor_front_mut().insert_after(10).finish();
     /// assert_eq!(cursor.current(), Some(&0));
-    /// assert_eq!(tc.clone().into_vec(), &[0, 10, 1, 2, 3, 4]);
+    /// assert_eq!(tc.to_vec(), &[0, 10, 1, 2, 3, 4]);
     ///
     /// let cursor = tc.cursor_front_mut().move_next_length(3).insert_after(20).finish();
     /// assert_eq!(cursor.current(), Some(&2));
-    /// assert_eq!(tc.clone().into_vec(), &[0, 10, 1, 2, 20, 3, 4]);
+    /// assert_eq!(tc.to_vec(), &[0, 10, 1, 2, 20, 3, 4]);
     ///
     /// let cursor = tc.cursor_back_mut().move_next().insert_after(-1).finish();
     /// assert_eq!(cursor.current(), None);
-    /// assert_eq!(tc.clone().into_vec(), &[-1, 0, 10, 1, 2, 20, 3, 4]);
+    /// assert_eq!(tc.to_vec(), &[-1, 0, 10, 1, 2, 20, 3, 4]);
     /// ```
     pub fn insert_after(&mut self, val: T) -> &mut Self {
         if !self.idx.is_none() {
@@ -2255,17 +2260,17 @@ impl<'t, T: 't> CursorMut<'t, T> {
     /// let mut cursor = tc.cursor_front_mut();
     /// assert_eq!(cursor.owned(), Some(0));
     /// assert_eq!(cursor.current(), Some(&1));
-    /// assert_eq!(tc.clone().into_vec(), &[1, 2, 3, 4]);
+    /// assert_eq!(tc.to_vec(), &[1, 2, 3, 4]);
     ///
     /// let mut cursor = tc.cursor_front_mut().move_next_length(2).finish();
     /// assert_eq!(cursor.owned(), Some(3));
     /// assert_eq!(cursor.current(), Some(&4));
-    /// assert_eq!(tc.clone().into_vec(), &[1, 2, 4]);
+    /// assert_eq!(tc.to_vec(), &[1, 2, 4]);
     ///
     /// let mut cursor = tc.cursor_back_mut();
     /// assert_eq!(cursor.owned(), Some(4));
     /// assert_eq!(cursor.current(), None);
-    /// assert_eq!(tc.clone().into_vec(), &[1, 2]);
+    /// assert_eq!(tc.to_vec(), &[1, 2]);
     /// ```
     pub fn owned(&mut self) -> Option<T> {
         let idx = self.idx.to_option()?;
@@ -2282,15 +2287,15 @@ impl<'t, T: 't> CursorMut<'t, T> {
     ///
     /// let cursor = tc.cursor_front_mut().remove().finish();
     /// assert_eq!(cursor.current(), Some(&1));
-    /// assert_eq!(tc.clone().into_vec(), &[1, 2, 3, 4]);
+    /// assert_eq!(tc.to_vec(), &[1, 2, 3, 4]);
     ///
     /// let cursor = tc.cursor_front_mut().move_next_length(2).remove().finish();
     /// assert_eq!(cursor.current(), Some(&4));
-    /// assert_eq!(tc.clone().into_vec(), &[1, 2, 4]);
+    /// assert_eq!(tc.to_vec(), &[1, 2, 4]);
     ///
     /// let cursor = tc.cursor_back_mut().remove().finish();
     /// assert_eq!(cursor.current(), None);
-    /// assert_eq!(tc.clone().into_vec(), &[1, 2]);
+    /// assert_eq!(tc.to_vec(), &[1, 2]);
     /// ```
     #[inline]
     pub fn remove(&mut self) -> &mut Self {
@@ -2516,18 +2521,20 @@ where
 {
     type Item = T;
 
+    #[inline]
     fn next(&mut self) -> Option<T> {
-        while let Some(x) = self.cursor.current_mut() {
+        while self.max_feature_len != 0 {
             self.max_feature_len -= 1;
+            let x = unsafe { self.cursor.current_unchecked_mut() };
             if (self.pred)(x) {
                 return self.cursor.owned();
             }
-            // safe by previous check
             unsafe { self.cursor.move_next_unchecked() };
         }
         None
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         (0, Some(self.max_feature_len))
     }
@@ -2547,8 +2554,9 @@ where
     F: FnMut(&mut T) -> bool,
 {
     tsil_cev: &'t mut TsilCev<T>,
+    current_ptr: *mut Val<T>,
     pred: F,
-    skips: usize,
+    max_feature_len: usize,
 }
 
 impl<T, F> Iterator for DrainFilterCev<'_, T, F>
@@ -2557,19 +2565,22 @@ where
 {
     type Item = T;
 
+    #[inline]
     fn next(&mut self) -> Option<T> {
-        while self.skips < self.tsil_cev.len() {
-            let x = unsafe { &mut self.tsil_cev.cev.get_unchecked_mut(self.skips).el };
+        while self.max_feature_len != 0 {
+            self.max_feature_len -= 1;
+            let x = unsafe { &mut (*self.current_ptr).el };
             if (self.pred)(x) {
-                return Some(unsafe { self.tsil_cev.make_empty(self.skips) }.0);
+                return Some(unsafe { self.tsil_cev.make_empty_ptr(self.current_ptr) }.0);
             }
-            self.skips += 1;
+            self.current_ptr = unsafe { self.current_ptr.offset(1) };
         }
         None
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (0, Some(self.tsil_cev.len() - self.skips))
+        (0, Some(self.max_feature_len))
     }
 }
 

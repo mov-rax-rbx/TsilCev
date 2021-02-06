@@ -177,11 +177,22 @@ fn remove(c: &mut Criterion) {
 
     for &i in SAMPLE.iter() {
         let tc = TsilCev::from(&TEST_DATA[..i]);
-        group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
+        group.bench_function(BenchmarkId::new("TsilCev LinkedList order", i), |b| {
             b.iter(|| {
                 let mut tc = tc.clone();
                 let mut cnt = 0;
                 tc.drain_filter_tsil(|_| {
+                    cnt += 1;
+                    cnt & 1 == 0
+                });
+            })
+        });
+
+        group.bench_function(BenchmarkId::new("TsilCev Vec order", i), |b| {
+            b.iter(|| {
+                let mut tc = tc.clone();
+                let mut cnt = 0;
+                tc.drain_filter_cev(|_| {
                     cnt += 1;
                     cnt & 1 == 0
                 });
@@ -300,14 +311,13 @@ fn iter(c: &mut Criterion) {
 }
 
 criterion_group!(
-    benches,
-    // pop_front,
+    benches, pop_front,
     // push_back,
     // from_iter,
     // bench,
-    // remove,
+    remove,
     // into_to_vec,
-    make_linked_list_order,
+    // make_linked_list_order,
     // iter,
 );
 criterion_main!(benches);
