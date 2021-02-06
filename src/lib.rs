@@ -177,12 +177,12 @@ impl<T> TsilCev<T> {
 
     #[inline]
     fn start(&self) -> Index {
-        debug_assert!(self.start.to_option().map_or(true, |x| x < self.cev.len()));
+        debug_assert!(self.start.to_option().map_or(true, |x| x < self.len()));
         self.start
     }
     #[inline]
     fn end(&self) -> Index {
-        debug_assert!(self.end.to_option().map_or(true, |x| x < self.cev.len()));
+        debug_assert!(self.end.to_option().map_or(true, |x| x < self.len()));
         self.end
     }
 
@@ -875,7 +875,7 @@ impl<T> TsilCev<T> {
     pub fn pop_back(&mut self) -> Option<T> {
         unsafe {
             let end_idx = self.end().to_option()?;
-            let last_idx = self.cev.len() - 1;
+            let last_idx = self.len() - 1;
 
             let end = self.cev.as_mut_ptr().add(end_idx);
             let last = self.cev.as_mut_ptr().add(last_idx);
@@ -918,7 +918,7 @@ impl<T> TsilCev<T> {
     pub fn pop_front(&mut self) -> Option<T> {
         unsafe {
             let start_idx = self.start().to_option()?;
-            let last_idx = self.cev.len() - 1;
+            let last_idx = self.len() - 1;
 
             let start = self.cev.as_mut_ptr().add(start_idx);
             let last = self.cev.as_mut_ptr().add(last_idx);
@@ -936,10 +936,10 @@ impl<T> TsilCev<T> {
     #[inline]
     unsafe fn insert(&mut self, prev: Index, next: Index, val: T) {
         debug_assert!(
-            prev.to_option().map_or(true, |x| x < self.cev.len())
-                && next.to_option().map_or(true, |x| x < self.cev.len())
+            prev.to_option().map_or(true, |x| x < self.len())
+                && next.to_option().map_or(true, |x| x < self.len())
         );
-        let current = self.cev.len();
+        let current = self.len();
         self.cev.push(Val {
             el: val,
             next: next,
@@ -951,8 +951,8 @@ impl<T> TsilCev<T> {
     #[inline]
     unsafe fn connect(&mut self, prev: Index, next: Index) {
         debug_assert!(
-            prev.to_option().map_or(true, |x| x < self.cev.len())
-                && next.to_option().map_or(true, |x| x < self.cev.len())
+            prev.to_option().map_or(true, |x| x < self.len())
+                && next.to_option().map_or(true, |x| x < self.len())
         );
         // safe if 0 <= x and y < cev.len
         match (prev.to_option(), next.to_option()) {
@@ -978,9 +978,9 @@ impl<T> TsilCev<T> {
     #[inline]
     unsafe fn reconnect(&mut self, prev: Index, next: Index, current: Index) {
         debug_assert!(
-            prev.to_option().map_or(true, |x| x < self.cev.len())
-                && next.to_option().map_or(true, |x| x < self.cev.len())
-                && current.to_option().map_or(false, |x| x < self.cev.len())
+            prev.to_option().map_or(true, |x| x < self.len())
+                && next.to_option().map_or(true, |x| x < self.len())
+                && current.to_option().map_or(false, |x| x < self.len())
         );
         // safe if 0 <= x and y and z < cev.len
         match (prev.to_option(), current.to_option(), next.to_option()) {
@@ -1006,9 +1006,9 @@ impl<T> TsilCev<T> {
 
     #[inline]
     unsafe fn make_empty(&mut self, idx: usize) -> (T, Index) {
-        debug_assert!(idx < self.cev.len() && !self.is_empty());
+        debug_assert!(idx < self.len() && !self.is_empty());
 
-        let last_idx = self.cev.len() - 1;
+        let last_idx = self.len() - 1;
         let last = self.cev.as_mut_ptr().add(last_idx);
         let val = self.cev.as_mut_ptr().add(idx);
 
@@ -1026,9 +1026,9 @@ impl<T> TsilCev<T> {
 
     #[inline]
     unsafe fn make_empty_ptr(&mut self, val: *mut Val<T>) -> (T, Index) {
-        debug_assert!(!val.is_null() && val < self.cev.as_mut_ptr().add(self.cev.len()));
+        debug_assert!(!val.is_null() && val < self.cev.as_mut_ptr().add(self.len()));
 
-        let last_idx = self.cev.len() - 1;
+        let last_idx = self.len() - 1;
         let last = self.cev.as_mut_ptr().add(last_idx);
 
         let next = (*val).next;
@@ -2642,7 +2642,7 @@ impl<T> Extend<T> for TsilCev<T> {
         // like
         // iter.into_iter().for_each(move |x| self.push_back(x));
 
-        let old_len = self.cev.len();
+        let old_len = self.len();
         self.cev
             .extend(
                 iter.into_iter()
@@ -2653,7 +2653,7 @@ impl<T> Extend<T> for TsilCev<T> {
                         prev: Index(current_idx.wrapping_sub(1)),
                     }),
             );
-        let new_len = self.cev.len();
+        let new_len = self.len();
         if new_len != old_len {
             // not underflow because new_len > 0
             let last = new_len - 1;
