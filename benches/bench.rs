@@ -1,5 +1,5 @@
 #![feature(drain_filter)]
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, BatchSize};
 use std::collections::LinkedList;
 use std::collections::VecDeque;
 use std::iter::FromIterator;
@@ -38,6 +38,7 @@ impl<'a> Test<'a> {
 }
 
 const SIZE: usize = 1 << 20;
+// const SIZE: usize = 570;
 lazy_static! {
     static ref TEST_DATA: Vec<Test<'static>> =
         (0..SIZE).into_iter().map(|x| Test::new(x)).collect();
@@ -52,35 +53,32 @@ fn pop_front(c: &mut Criterion) {
     for &i in SAMPLE.iter() {
         let tc = TsilCev::from(&TEST_DATA[..i]);
         group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
-            b.iter(|| {
-                let mut tc = tc.clone();
+            b.iter_batched(|| tc.clone(), |mut tc| {
                 for _ in 0..i {
                     tc.pop_front();
                 }
-            })
+            },
+            BatchSize::LargeInput);
         });
 
         let dec = VecDeque::from_iter(TEST_DATA.iter().take(i).cloned());
         group.bench_function(BenchmarkId::new("VecDeque", i), |b| {
-            b.iter(|| {
-                let mut dec = dec.clone();
+            b.iter_batched(|| dec.clone(), |mut dec| {
                 for _ in 0..i {
                     dec.pop_front();
                 }
-            })
+            },
+            BatchSize::LargeInput);
         });
 
-        let mut ll = LinkedList::new();
-        for x in TEST_DATA.iter().take(i) {
-            ll.push_back(x.clone());
-        }
+        let ll = LinkedList::from_iter(TEST_DATA.iter().take(i).cloned());
         group.bench_function(BenchmarkId::new("LinkedList", i), |b| {
-            b.iter(|| {
-                let mut ll = ll.clone();
+            b.iter_batched(|| ll.clone(), |mut ll| {
                 for _ in 0..i {
                     ll.pop_front();
                 }
-            })
+            },
+            BatchSize::LargeInput);
         });
     }
 
@@ -91,34 +89,32 @@ fn push_back(c: &mut Criterion) {
     let mut group = c.benchmark_group("push_back");
 
     for &i in SAMPLE.iter() {
-        let tc = TsilCev::new();
+
         group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
-            b.iter(|| {
-                let mut tc = tc.clone();
+            b.iter_batched(|| TsilCev::new(), |mut tc| {
                 for x in TEST_DATA.iter().take(i) {
                     tc.push_back(x);
                 }
-            })
+            },
+            BatchSize::LargeInput);
         });
 
-        let dec = VecDeque::new();
         group.bench_function(BenchmarkId::new("VecDeque", i), |b| {
-            b.iter(|| {
-                let mut dec = dec.clone();
+            b.iter_batched(|| VecDeque::new(), |mut dec| {
                 for x in TEST_DATA.iter().take(i) {
                     dec.push_back(x);
                 }
-            })
+            },
+            BatchSize::LargeInput);
         });
 
-        let ll = LinkedList::new();
         group.bench_function(BenchmarkId::new("LinkedList", i), |b| {
-            b.iter(|| {
-                let mut ll = ll.clone();
+            b.iter_batched(|| LinkedList::new(), |mut ll| {
                 for x in TEST_DATA.iter().take(i) {
                     ll.push_back(x);
                 }
-            })
+            },
+            BatchSize::LargeInput);
         });
     }
 
@@ -132,19 +128,19 @@ fn from_iter(c: &mut Criterion) {
         group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
             b.iter(|| {
                 let _ = TsilCev::from_iter(TEST_DATA.iter().take(i).cloned());
-            })
+            });
         });
 
         group.bench_function(BenchmarkId::new("VecDeque", i), |b| {
             b.iter(|| {
                 let _ = VecDeque::from_iter(TEST_DATA.iter().take(i).cloned());
-            })
+            });
         });
 
         group.bench_function(BenchmarkId::new("LinkedList", i), |b| {
             b.iter(|| {
                 let _ = LinkedList::from_iter(TEST_DATA.iter().take(i).cloned());
-            })
+            });
         });
     }
 
@@ -156,9 +152,8 @@ fn bench(c: &mut Criterion) {
 
     for &i in SAMPLE.iter() {
         let tc = TsilCev::with_capacity(i);
-        group.bench_function(BenchmarkId::new("TsilCev", i), |b| {
-            b.iter(|| {
-                let mut tc = tc.clone();
+        group.bench_function(BenchmarkId::new("TsilCev with_capacity", i), |b| {
+            b.iter_batched(|| tc.clone(), |mut tc| {
                 for x in TEST_DATA.iter().take(i / 2) {
                     tc.push_back(x.clone());
                 }
@@ -171,13 +166,13 @@ fn bench(c: &mut Criterion) {
                 for _ in TEST_DATA.iter().take(i / 2) {
                     tc.pop_back();
                 }
-            })
+            },
+            BatchSize::LargeInput);
         });
 
         let dec = VecDeque::with_capacity(i);
-        group.bench_function(BenchmarkId::new("VecDeque", i), |b| {
-            b.iter(|| {
-                let mut dec = dec.clone();
+        group.bench_function(BenchmarkId::new("VecDeque with_capacity", i), |b| {
+            b.iter_batched(|| dec.clone(), |mut dec| {
                 for x in TEST_DATA.iter().take(i / 2) {
                     dec.push_back(x.clone());
                 }
@@ -190,13 +185,13 @@ fn bench(c: &mut Criterion) {
                 for _ in TEST_DATA.iter().take(i / 2) {
                     dec.pop_back();
                 }
-            })
+            },
+            BatchSize::LargeInput);
         });
 
         let ll = LinkedList::new();
         group.bench_function(BenchmarkId::new("LinkedList", i), |b| {
-            b.iter(|| {
-                let mut ll = ll.clone();
+            b.iter_batched(|| ll.clone(), |mut ll| {
                 for x in TEST_DATA.iter().take(i / 2) {
                     ll.push_back(x.clone());
                 }
@@ -209,7 +204,8 @@ fn bench(c: &mut Criterion) {
                 for _ in TEST_DATA.iter().take(i / 2) {
                     ll.pop_back();
                 }
-            })
+            },
+            BatchSize::LargeInput);
         });
     }
 
@@ -222,21 +218,38 @@ fn remove(c: &mut Criterion) {
     for &i in SAMPLE.iter() {
         let tc = TsilCev::from(&TEST_DATA[..i]);
         group.bench_function(BenchmarkId::new("TsilCev LinkedList order", i), |b| {
-            b.iter(|| {
-                tc.clone().drain_filter_tsil(|x| x.get_val() & 1 == 0);
-            })
+            b.iter_batched(|| tc.clone(), |mut tc| {
+                let _ = tc.drain_filter_tsil(|x| x.get_val() & 1 == 0);
+            },
+            BatchSize::LargeInput);
         });
 
         group.bench_function(BenchmarkId::new("TsilCev Vec order", i), |b| {
-            b.iter(|| {
-                tc.clone().drain_filter_cev(|x| x.get_val() & 1 == 0);
-            })
+            b.iter_batched(|| tc.clone(), |mut tc| {
+                let _ = tc.drain_filter_cev(|x| x.get_val() & 1 == 0);
+            },
+            BatchSize::LargeInput);
         });
 
         let dec = VecDeque::from_iter(TEST_DATA.iter().take(i).cloned());
+        group.bench_function(BenchmarkId::new("VecDeque remove with save order", i), |b| {
+            b.iter_batched(|| dec.clone(), |mut dec| {
+                let mut x = 0;
+                let mut end = i;
+                while x < end {
+                    if dec[x].get_val() & 1 == 0 {
+                        let _ = dec.remove(x);
+                        end -= 1;
+                        continue;
+                    }
+                    x += 1;
+                }
+            },
+            BatchSize::LargeInput);
+        });
+
         group.bench_function(BenchmarkId::new("VecDeque swap_remove_back", i), |b| {
-            b.iter(|| {
-                let mut dec = dec.clone();
+            b.iter_batched(|| dec.clone(), |mut dec| {
                 let mut x = 0;
                 let mut end = i;
                 while x < end {
@@ -248,18 +261,16 @@ fn remove(c: &mut Criterion) {
                     }
                     x += 1;
                 }
-            })
+            },
+            BatchSize::LargeInput);
         });
 
-        let mut ll = LinkedList::new();
-        for x in TEST_DATA.iter().take(i) {
-            ll.push_back(x.clone());
-        }
+        let ll = LinkedList::from_iter(TEST_DATA.iter().take(i).cloned());
         group.bench_function(BenchmarkId::new("LinkedList", i), |b| {
-            b.iter(|| {
-                let mut ll = ll.clone();
-                ll.drain_filter(|x| x.get_val() & 1 == 0);
-            })
+            b.iter_batched(|| ll.clone(), |mut ll| {
+                let _ = ll.drain_filter(|x| x.get_val() & 1 == 0);
+            },
+            BatchSize::LargeInput);
         });
     }
 
@@ -311,5 +322,13 @@ fn iter(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, pop_front, push_back, from_iter, bench, remove, iter,);
+criterion_group!(
+    benches,
+    pop_front,
+    push_back,
+    from_iter,
+    bench,
+    remove,
+    iter,
+);
 criterion_main!(benches);
